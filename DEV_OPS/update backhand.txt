@@ -1,39 +1,40 @@
 
 update backhand
 
+Prompt to Claude:
+Run the following commands exactly in order, one after the other.
+Stop if any command fails and show me the failing command + error output.
 
-// cmd in vl
+1) Create backend package
 vl-admin dev pack --be --cpu --skip-gpu
 
-// uninstall
-
+2) Uninstall
 helm uninstall visual-layer
 helm uninstall keycloak -n keycloak
 helm uninstall openfga -n openfga
 
-// delete pvc and volumes
-
+3) Delete PVCs and volumes
+# first get all PVCs
 kubectl get pvc -A
-kubectl get volumes -A
-kubectl delete po
+# then delete all PVCs in all namespaces
+kubectl delete pvc --all -A
 
+# then get all volumes (PVs)
+kubectl get pv
+# then delete all volumes (PVs)
+kubectl delete pv --all
 
-// install
-
+4) Install
 helm upgrade -i visual-layer devops/visual-layer \
   -f devops/env/k3s/values.yaml \
   -f devops/clients/camtek/values.yaml \
   --namespace default
 
 vl-admin install keycloak
-
 vl-admin install openfga
 
-
-// verify
+5) Verify pods are running
 kubectl get pods
-
-// verify spesific
 kubectl get pods -n keycloak
 kubectl get pods -n openfga
 
