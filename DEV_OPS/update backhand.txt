@@ -1,0 +1,39 @@
+
+update backhand
+
+
+// cmd in vl
+vl-admin dev pack --be --cpu --skip-gpu
+
+// uninstall
+
+helm uninstall visual-layer
+helm uninstall keycloak -n keycloak
+helm uninstall openfga -n openfga
+
+// delete pvc and volumes
+
+kubectl get pvc -A
+kubectl get volumes -A
+kubectl delete po
+
+
+// install
+
+helm upgrade -i visual-layer devops/visual-layer \
+  -f devops/env/k3s/values.yaml \
+  -f devops/clients/camtek/values.yaml \
+  --namespace default
+
+vl-admin install keycloak
+
+vl-admin install openfga
+
+
+// verify
+kubectl get pods
+
+// verify spesific
+kubectl get pods -n keycloak
+kubectl get pods -n openfga
+
