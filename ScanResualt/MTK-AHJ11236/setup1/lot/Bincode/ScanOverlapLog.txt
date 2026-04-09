@@ -1,0 +1,10 @@
+Scan 2d Overlap [px], [um]; Pixel size = 1.128, 1.13
+Minimum             :    32,   32,   36,   36
+Detection           :    63,   63,   71,   71
+User Minimum        :     0,    0,    0,    0
+Die Alignment       :   339,  339,  383,  383
+Small Dice          :     0,    0,    0,    0
+Frame Margins       :    16,   16,   18,   18
+Maximum             :   806,  806,  910,  910
+==================
+Scan                :   339,  339,  383,  383
