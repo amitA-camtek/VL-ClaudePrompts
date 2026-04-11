@@ -1,0 +1,223 @@
+﻿================================================================================
+ADC Export Log - All Recipes
+Generated: 2026-04-06 20:15:16
+================================================================================
+
+EXPORT LOG ENTRIES:
+----------------------------------------
+2026-04-06 20:13:52.064 [INFO] ADC Export Started
+2026-04-06 20:13:52.064 [INFO] Export Path: C:\temp\ExportVl
+2026-04-06 20:13:52.064 [INFO] Number of wafers: 2
+2026-04-06 20:13:52.064 [INFO] Settings - Default Distance: 10μ
+2026-04-06 20:13:52.064 [INFO] Settings - Separate Recipes: False
+2026-04-06 20:13:52.064 [INFO] Settings - Image Types: Both
+2026-04-06 20:13:52.064 [INFO] ----------------------------------------
+2026-04-06 20:13:54.269 [INFO] Exported Defect ID 0 with 1 image(s) (Recipe: x7.5 Bump PMI)
+2026-04-06 20:13:57.376 [INFO] Exported Defect ID 134217728 with 1 image(s) (Recipe: x7.5 Bump PMI)
+2026-04-06 20:13:59.134 [INFO] Exported Defect ID 134217729 with 1 image(s) (Recipe: x7.5 Bump PMI)
+2026-04-06 20:14:01.075 [INFO] Exported Defect ID 134217730 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:02.807 [INFO] Exported Defect ID 134217731 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:04.474 [INFO] Exported Defect ID 134217732 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:06.101 [INFO] Exported Defect ID 134217733 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:07.840 [INFO] Exported Defect ID 134217734 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:09.760 [INFO] Exported Defect ID 134217735 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:11.146 [INFO] Exported Defect ID 134217736 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:13.059 [INFO] Exported Defect ID 134217737 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:15.016 [INFO] Exported Defect ID 134217739 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:16.426 [INFO] Exported Defect ID 134217740 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:18.367 [INFO] Exported Defect ID 134217741 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:20.024 [INFO] Exported Defect ID 134217742 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:21.372 [INFO] Exported Defect ID 134217743 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:23.311 [INFO] Exported Defect ID 134217744 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:24.963 [INFO] Exported Defect ID 134217746 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:26.918 [INFO] Exported Defect ID 134217747 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:29.112 [INFO] Exported Defect ID 134217748 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:31.032 [INFO] Exported Defect ID 134217749 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:32.671 [INFO] Exported Defect ID 134217750 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:34.620 [INFO] Exported Defect ID 134217751 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:36.636 [INFO] Exported Defect ID 134217752 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:38.302 [INFO] Exported Defect ID 134217753 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:39.798 [INFO] Exported Defect ID 134217754 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:41.572 [INFO] Exported Defect ID 134217756 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:43.517 [INFO] Exported Defect ID 134217757 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:45.226 [INFO] Exported Defect ID 134217758 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:47.045 [INFO] Exported Defect ID 134217759 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:48.674 [INFO] Exported Defect ID 134217760 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:50.054 [INFO] Exported Defect ID 134217761 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:51.686 [INFO] Exported Defect ID 134217762 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:53.564 [INFO] Exported Defect ID 134217763 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:55.235 [INFO] Exported Defect ID 134217764 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:56.852 [INFO] Exported Defect ID 134217765 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:14:58.504 [INFO] Exported Defect ID 134217766 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:00.138 [INFO] Exported Defect ID 134217767 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:01.513 [INFO] Exported Defect ID 134217768 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:03.293 [INFO] Exported Defect ID 134217769 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:05.214 [INFO] Exported Defect ID 134217770 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:06.866 [INFO] Exported Defect ID 134217771 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:08.886 [INFO] Exported Defect ID 134217772 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:10.582 [INFO] Exported Defect ID 134217773 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:12.009 [INFO] Exported Defect ID 134217774 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:13.922 [INFO] Exported Defect ID 134217775 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:15.562 [INFO] Exported Defect ID 134217776 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.113 [INFO] Exported Defect ID 134217777 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.116 [INFO] Exported Defect ID 134217778 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.118 [INFO] Exported Defect ID 134217779 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.122 [INFO] Exported Defect ID 134217780 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.125 [INFO] Exported Defect ID 134217781 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.127 [INFO] Exported Defect ID 134217782 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.129 [INFO] Exported Defect ID 134217784 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.132 [INFO] Exported Defect ID 134217785 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.134 [INFO] Exported Defect ID 134217786 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.136 [INFO] Exported Defect ID 134217789 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.139 [INFO] Exported Defect ID 134217791 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.141 [INFO] Exported Defect ID 134217792 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.143 [INFO] Exported Defect ID 134217794 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.146 [INFO] Exported Defect ID 134217795 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.148 [INFO] Exported Defect ID 134217796 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.150 [INFO] Exported Defect ID 134217797 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.152 [INFO] Exported Defect ID 134217798 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.155 [INFO] Exported Defect ID 134217799 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.157 [INFO] Exported Defect ID 134217800 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.159 [INFO] Exported Defect ID 134217801 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.162 [INFO] Exported Defect ID 134217802 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.164 [INFO] Exported Defect ID 134217803 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.166 [INFO] Exported Defect ID 134217804 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.168 [INFO] Exported Defect ID 134217805 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.171 [INFO] Exported Defect ID 134217806 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.173 [INFO] Exported Defect ID 134217807 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.175 [INFO] Exported Defect ID 134217808 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.177 [INFO] Exported Defect ID 134217809 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.179 [INFO] Exported Defect ID 134217810 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.182 [INFO] Exported Defect ID 134217811 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.185 [INFO] Exported Defect ID 134217812 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.188 [INFO] Exported Defect ID 134217813 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.191 [INFO] Exported Defect ID 134217814 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.193 [INFO] Exported Defect ID 134217815 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.195 [INFO] Exported Defect ID 134217816 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.198 [INFO] Exported Defect ID 134217817 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.199 [INFO] Exported Defect ID 134217818 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.202 [INFO] Exported Defect ID 134217819 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.207 [INFO] Exported Defect ID 134217820 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.213 [INFO] Exported Defect ID 134217821 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.218 [INFO] Exported Defect ID 134217822 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.224 [INFO] Exported Defect ID 134217823 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.227 [INFO] Exported Defect ID 134217824 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.230 [INFO] Exported Defect ID 0 with 1 image(s) (Recipe: x7.5 Bump PMI)
+2026-04-06 20:15:16.233 [INFO] Exported Defect ID 134217728 with 1 image(s) (Recipe: x7.5 Bump PMI)
+2026-04-06 20:15:16.236 [INFO] Exported Defect ID 134217729 with 1 image(s) (Recipe: x7.5 Bump PMI)
+2026-04-06 20:15:16.239 [INFO] Exported Defect ID 134217730 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.240 [INFO] Exported Defect ID 134217731 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.242 [INFO] Exported Defect ID 134217732 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.245 [INFO] Exported Defect ID 134217733 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.247 [INFO] Exported Defect ID 134217734 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.250 [INFO] Exported Defect ID 134217735 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.251 [INFO] Exported Defect ID 134217736 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.254 [INFO] Exported Defect ID 134217737 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.256 [INFO] Exported Defect ID 134217739 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.258 [INFO] Exported Defect ID 134217740 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.260 [INFO] Exported Defect ID 134217741 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.262 [INFO] Exported Defect ID 134217742 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.264 [INFO] Exported Defect ID 134217743 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.267 [INFO] Exported Defect ID 134217744 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.270 [INFO] Exported Defect ID 134217746 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.272 [INFO] Exported Defect ID 134217747 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.276 [INFO] Exported Defect ID 134217748 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.279 [INFO] Exported Defect ID 134217749 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.281 [INFO] Exported Defect ID 134217750 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.284 [INFO] Exported Defect ID 134217751 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.287 [INFO] Exported Defect ID 134217752 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.290 [INFO] Exported Defect ID 134217753 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.293 [INFO] Exported Defect ID 134217754 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.296 [INFO] Exported Defect ID 134217756 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.300 [INFO] Exported Defect ID 134217757 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.303 [INFO] Exported Defect ID 134217758 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.306 [INFO] Exported Defect ID 134217759 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.309 [INFO] Exported Defect ID 134217760 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.312 [INFO] Exported Defect ID 134217761 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.315 [INFO] Exported Defect ID 134217762 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.318 [INFO] Exported Defect ID 134217763 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.322 [INFO] Exported Defect ID 134217764 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.325 [INFO] Exported Defect ID 134217765 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.328 [INFO] Exported Defect ID 134217766 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.330 [INFO] Exported Defect ID 134217767 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.333 [INFO] Exported Defect ID 134217768 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.335 [INFO] Exported Defect ID 134217769 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.337 [INFO] Exported Defect ID 134217770 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.339 [INFO] Exported Defect ID 134217771 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.342 [INFO] Exported Defect ID 134217772 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.344 [INFO] Exported Defect ID 134217773 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.347 [INFO] Exported Defect ID 134217774 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.349 [INFO] Exported Defect ID 134217775 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.351 [INFO] Exported Defect ID 134217776 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.354 [INFO] Exported Defect ID 134217777 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.356 [INFO] Exported Defect ID 134217778 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.358 [INFO] Exported Defect ID 134217779 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.360 [INFO] Exported Defect ID 134217780 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.363 [INFO] Exported Defect ID 134217781 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.365 [INFO] Exported Defect ID 134217782 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.367 [INFO] Exported Defect ID 134217784 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.369 [INFO] Exported Defect ID 134217785 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.371 [INFO] Exported Defect ID 134217786 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.374 [INFO] Exported Defect ID 134217789 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.376 [INFO] Exported Defect ID 134217791 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.378 [INFO] Exported Defect ID 134217792 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.380 [INFO] Exported Defect ID 134217794 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.383 [INFO] Exported Defect ID 134217795 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.386 [INFO] Exported Defect ID 134217796 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.389 [INFO] Exported Defect ID 134217797 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.391 [INFO] Exported Defect ID 134217798 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.394 [INFO] Exported Defect ID 134217799 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.397 [INFO] Exported Defect ID 134217800 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.399 [INFO] Exported Defect ID 134217801 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.402 [INFO] Exported Defect ID 134217802 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.404 [INFO] Exported Defect ID 134217803 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.406 [INFO] Exported Defect ID 134217804 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.408 [INFO] Exported Defect ID 134217805 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.410 [INFO] Exported Defect ID 134217806 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.411 [INFO] Exported Defect ID 134217807 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.413 [INFO] Exported Defect ID 134217808 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.415 [INFO] Exported Defect ID 134217809 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.417 [INFO] Exported Defect ID 134217810 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.418 [INFO] Exported Defect ID 134217811 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.420 [INFO] Exported Defect ID 134217812 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.422 [INFO] Exported Defect ID 134217813 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.423 [INFO] Exported Defect ID 134217814 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.425 [INFO] Exported Defect ID 134217815 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.427 [INFO] Exported Defect ID 134217816 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.428 [INFO] Exported Defect ID 134217817 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.431 [INFO] Exported Defect ID 134217818 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.432 [INFO] Exported Defect ID 134217819 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.434 [INFO] Exported Defect ID 134217820 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.435 [INFO] Exported Defect ID 134217821 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.437 [INFO] Exported Defect ID 134217822 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.440 [INFO] Exported Defect ID 134217823 with 1 image(s) (Recipe: x3.5 Surface)
+2026-04-06 20:15:16.442 [INFO] Exported Defect ID 134217824 with 1 image(s) (Recipe: x3.5 Surface)
+
+EXPORT SUMMARY:
+----------------------------------------
+Total Recipes Processed: 2
+Total Defects with Images: 180
+Total Defects without Images: 0
+Total Defects exceeding distance: 0
+Total Duplicate image instances: 0
+Total Image References: 180
+Total Unique Image Files: 90
+
+RECIPE BREAKDOWN:
+----------------------------------------
+Recipe: x7.5 Bump PMI
+  Defects with Images: 6
+  Defects without Images: 0
+  Defects exceeding distance: 0
+  Duplicate image instances: 0
+  Image References: 6
+  Unique Image Files: 3
+
+Recipe: x3.5 Surface
+  Defects with Images: 174
+  Defects without Images: 0
+  Defects exceeding distance: 0
+  Duplicate image instances: 0
+  Image References: 174
+  Unique Image Files: 87
+

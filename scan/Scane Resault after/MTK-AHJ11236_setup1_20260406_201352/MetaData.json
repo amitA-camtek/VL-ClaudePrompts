@@ -1,0 +1,13 @@
+{
+  "Customer Name": "KYEC",
+  "Job Name": "MTK-AHJ11236",
+  "Setup Name": "setup1",
+  "Recipes Name": [
+    "x7.5 Bump PMI",
+    "x3.5 Surface"
+  ],
+  "Tool List": [
+    "EAGLET_106739"
+  ],
+  "Export Timestamp": "2026-04-06 20:13:53"
+}
