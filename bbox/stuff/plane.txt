@@ -1,0 +1,111 @@
+Let me read the scanResult.md file first to understand the context. 
+
+Read [](file:///home/ubuntu/vl_camtek/scanResault.md#1-1), lines 1 to 300
+
+Read [](file:///home/ubuntu/vl_camtek/scanResault.md#300-300), lines 300 to 400
+
+Now let me quickly check how the existing codebase handles dataset creation and image rendering to make the prompt maximally useful. 
+
+Explore dataset creation and image display
+
+Searched for regex `DataServerClient|export_adc|scan result|create dataset|dataset from scan` (`**/clustplorer/web/**|clustplorer/logic/**`), no results
+
+Searched for regex `image|viewer|canvas|bbox|overlay|annotation|defect|side.?by.?side` (`**/fe/clustplorer/**`), 50 results
+
+Searched for regex `DB.csv|csv|XInFrame|YInFrame|Wafer X|Wafer Y`, 50 results
+
+Now I have full context. Here's the prompt:
+
+---
+
+## Prompt for Claude
+
+Copy and paste the following into a new Claude conversation:
+
+---
+
+**You are an expert full-stack engineer specializing in React/TypeScript frontends and Python/FastAPI backends for industrial computer-vision platforms.**
+
+### Context
+
+I'm working on a wafer-inspection platform called **Visual Layer (VL)**. The system receives **scan results** from a Camtek optical inspection tool (EAGLET). Each scan result is a folder with this structure:
+
+```
+MTK-AHJ11236_setup1_20260406_201352/
+├── Classes.json          # Maps numeric OClass codes → defect names (e.g. 1→"Pass", 34→"Bump Missing")
+├── DB.csv                # One row per inspected die — 18 columns (see schema below)
+├── MetaData.json         # Customer, job name, setup, recipes, tool list, export timestamp
+├── export.log
+└── images/
+    ├── lot_01/           # 100+ JPEG images per lot
+    └── lot_02/
+```
+
+**DB.csv columns:**
+```
+ImageName, Tool, Job Name, Setup Name, Recipe, Recipe Name, Wafer,
+Lot, Col, Row, Mode, OClass, Index, Wafer X, Wafer Y, XInFrame,
+YInFrame, Zone
+```
+
+Key columns for this task:
+- `ImageName` — relative path to the JPEG, e.g. `images/lot_01/259793.119486.c.-1615541774.1.jpeg`
+- `OClass` — integer defect classification code (maps via Classes.json)
+- `Wafer X`, `Wafer Y` — die position on wafer (microns, float)
+- `XInFrame`, `YInFrame` — pixel offset of the defect **within the image** (integer)
+- `Recipe Name` — two recipes exist: `x7.5 Bump PMI` (high magnification) and `x3.5 Surface` (low magnification). The **same die** can have rows under both recipes — meaning two separate images of the same physical location at different zoom levels.
+
+**Existing codebase facts:**
+- Backend: Python/FastAPI (clustplorer). DB.csv is already parsed with Polars in api_dataset_csv_export.py → `_read_folder_csv()`.
+- Frontend: React/TypeScript (clustplorer). Types for `AnnotatedBoundingBox[]` and `object_annotations` already exist in `extractedBackendTypes.ts`. Image viewer routes exist at `/dataset/:datasetId/data/image/:imageId`.
+- The system already has a **Scan Results page** that lists repositories and wafers via a gRPC Data Server. After selecting a scan result, the user can currently trigger "Export" which copies images to a local dataset folder.
+- Dataset creation exists — the user can create a VL dataset from a local folder of images. The pipeline processes them (generates embeddings, thumbnails, etc.).
+
+### Requirements
+
+I need to add a **new workflow** between "scan result selected" and "dataset created":
+
+**Requirement 1 — Preview & Review step (before dataset creation):**
+
+After the user selects a scan result but **before** creating a VL dataset, show a review screen where:
+
+1. **Side-by-side image comparison**: For each die that has images under **both recipes** (same Col/Row/Wafer), display the two images (e.g. `x7.5 Bump PMI` on the left, `x3.5 Surface` on the right) next to each other. This lets the operator compare high-mag and low-mag views of the same defect location.
+
+2. **Bounding box overlay on defects**: On each image, draw a bounding box around the defect using `XInFrame` and `YInFrame` from DB.csv. These are pixel coordinates of the defect center within the image. The box size should be configurable (e.g. 50×50px default, adjustable via a slider) since DB.csv provides only the center point, not width/height.
+
+3. **Defect class label**: Display the defect class name (from `Classes.json`) as a label on or near the bounding box, color-coded by severity category (Pass=green, Defect=red, Acceptable=yellow).
+
+4. **Filtering**: Let the user filter the review list by OClass (defect type), Zone, Recipe, or Lot. The user should be able to exclude specific images or defect classes before proceeding.
+
+**Requirement 2 — Create dataset from reviewed scan result:**
+
+After the user finishes reviewing and optionally filtering out unwanted images/defects:
+
+5. Create a VL dataset containing only the **approved** images. The dataset should carry over the defect annotations (class + bounding box) as VL annotations so they appear in the normal dataset exploration UI.
+
+### What I need from you
+
+Investigate and produce:
+
+**A. Analysis & open questions** — Identify ambiguities, edge cases, and technical unknowns. For example:
+- What should happen for dies that only have one recipe image (no pair)?
+- How large should the default bounding box be given that XInFrame/YInFrame are center points with no size?
+- Should the side-by-side view synchronize zoom/pan between the two images?
+- How do we map scan-result defect classes to VL's existing annotation model?
+
+**B. Primary design** — A detailed design covering:
+- Backend: new API endpoints, data models, how DB.csv + Classes.json are parsed and served
+- Frontend: component hierarchy, state management, UI layout for the review screen
+- Data flow: from scan result folder → review screen → filtered dataset creation
+- How bounding boxes are computed from (XInFrame, YInFrame) + configurable size
+- How the approved subset feeds into the existing dataset creation pipeline
+
+**C. Alternative designs** (at least 2) — For key architectural decisions, propose alternatives with trade-offs:
+- Server-side vs. client-side image pairing and bbox rendering
+- Inline review (within the existing Scan Results page) vs. a dedicated new page/modal
+- Pre-filtering on the backend vs. sending all data to the frontend and filtering there
+- Annotation storage: convert to VL's native annotation format at creation time vs. keeping a reference to the original DB.csv
+
+For each alternative, state the trade-offs in terms of complexity, performance, UX, and maintainability.
+
+---

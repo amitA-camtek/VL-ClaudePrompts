@@ -1,0 +1,6 @@
+Show both images side by side side if exist (color/grey scale)
+load full images (grey/color) and dynamically crop GT (Ground Truth) defect areas and show the user the same ROI on both images
+
+UI CROP - showing  multiple bboxes on a single tiloe - show as much bboxes as you can exery crop
+
+lable propagation CROP - generate bbox embeddinf features on fly for label propagation process (crop where bbox is centerd, use padding if needed)  - use this crop version for label propagation (may be different from UI crop

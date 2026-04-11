@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(py|csv|json\\)$\")",
+      "Bash(find \"/c/Users/amita/Desktop/detaction AI/scripts\" -name \"*.md\" -type f -exec grep -l \"db.csv\\\\|database\\\\|endpoint\\\\|route\\\\|Flask\\\\|FastAPI\" {} \\\\;)"
+    ]
+  }
+}
