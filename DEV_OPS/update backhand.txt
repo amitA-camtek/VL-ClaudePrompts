@@ -5,8 +5,14 @@ Prompt to Claude:
 Run the following commands exactly in order, one after the other.
 Stop if any command fails and show me the failing command + error output.
 
+0) delete dist
+// delete the content of /vl_camtek/dist/on-prem/internal-dev/vl
+
+rm -rf /vl_camtek/dist/on-prem/internal-dev/vl/* /vl_camtek/dist/on-prem/internal-dev/vl/.*
+
+
 1) Create backend package
-vl-admin dev pack --be --cpu --skip-gpu
+vl-admin dev pack --be --cpu --skip-gpu --fe
 
 2) Uninstall
 helm uninstall visual-layer
@@ -24,6 +30,11 @@ kubectl get pv
 # then delete all volumes (PVs)
 kubectl delete pv --all
 
+
+
+# delete all remains pods
+kubectl delete pods -all -A
+
 4) Install
 helm upgrade -i visual-layer devops/visual-layer \
   -f devops/env/k3s/values.yaml \
@@ -37,4 +48,7 @@ vl-admin install openfga
 kubectl get pods
 kubectl get pods -n keycloak
 kubectl get pods -n openfga
+
+6) update launch
+update launch.json , use the developer guid
 

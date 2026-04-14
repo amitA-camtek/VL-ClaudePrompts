@@ -1,0 +1,18 @@
+goal
+Understand the dataset before annotation — identify quality issues and prioritize effort.
+
+flow
+Open dataset → Explore tab → browse auto-generated clusters
+Open Insights Panel: check duplicates, outlier, and dark image counts
+Apply Class Outliers filter + confidence slider to surface mislabeled images
+Apply Quality Issues filter (blur, dark, bright) to flag bad images
+Tag problematic images for exclusion or engineer review
+Navigate spatially: Wafer map → click die → Die view → click frame → Tile
+Review defect distribution per class in the Insights label bars
+
+
+ACCEPTANCE CRITERIA
+Outlier and quality issue counts visible before annotation starts
+Spatial navigation Wafer → Die → Frame → Tile works end-to-end
+Filtered view updates dynamically in thumbnail grid and Insights Panel
+Tagged images excluded from annotation queue

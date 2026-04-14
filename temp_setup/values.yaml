@@ -1,0 +1,9 @@
+# Model training configuration
+modelTraining:
+  apiEndpoint: "10.20.30.40:5000"
+features:
+  disableAuth: true
+oidc:
+  enabled: false
+dataServer:
+  grpcEndpoint: "10.5.1.126:5050"

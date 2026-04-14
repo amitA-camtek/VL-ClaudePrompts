@@ -2,7 +2,22 @@
   "permissions": {
     "allow": [
       "Bash(grep -E \"\\\\.\\(py|csv|json\\)$\")",
-      "Bash(find \"/c/Users/amita/Desktop/detaction AI/scripts\" -name \"*.md\" -type f -exec grep -l \"db.csv\\\\|database\\\\|endpoint\\\\|route\\\\|Flask\\\\|FastAPI\" {} \\\\;)"
+      "Bash(find \"/c/Users/amita/Desktop/detaction AI/scripts\" -name \"*.md\" -type f -exec grep -l \"db.csv\\\\|database\\\\|endpoint\\\\|route\\\\|Flask\\\\|FastAPI\" {} \\\\;)",
+      "Bash(python -c \"import pptx; print\\('python-pptx available'\\)\")",
+      "Bash(pip install:*)",
+      "Bash(ls /c/Python*/python.exe)",
+      "Read(//c/Users/amita/AppData/Local/Programs/**)",
+      "Bash(python3 -c \"import pptx; print\\('ok'\\)\")",
+      "Bash(python3 -m pip install python-pptx)",
+      "Bash(py -3 -c \"print\\('hello'\\)\")",
+      "Bash(ls /c/Python3*/python.exe)",
+      "Read(//c/Program Files/**)",
+      "Bash(ls /c/Users/amita/AppData/Local/Programs/Python/Python3*/python.exe)",
+      "Bash(cmd.exe /c \"where python\")",
+      "Bash(unzip -l \"C:/Users/amita/Desktop/detaction AI/scripts/VL/AI_VL.pptx\")",
+      "Bash(awk -F',' 'NR>1 {print $12}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/Scane Resault after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")",
+      "Bash(awk -F',' 'NR>1 {print $6}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/Scane Resault after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")",
+      "Bash(awk -F',' 'NR>1 {print $18}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/Scane Resault after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")"
     ]
   }
 }
