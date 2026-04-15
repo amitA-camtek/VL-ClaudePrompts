@@ -30,6 +30,9 @@
 8. [Appendix A — systemd Unit Examples](#appendix-a--systemd-unit-examples)
 9. [Appendix B — Docker Compose Stack](#appendix-b--docker-compose-stack)
 10. [Appendix C — Config/Env Mapping (K8s to On-Prem)](#appendix-c--configenv-mapping-k8s-to-on-prem)
+11. [Appendix D — Per-Pipe File Changes & Code](#appendix-d--per-pipe-file-changes--code)
+12. [Appendix E — Deployment Plan](#appendix-e--deployment-plan)
+13. [Appendix F — VM Hardware Specification](#appendix-f--vm-hardware-specification)
 
 ---
 
@@ -1056,6 +1059,845 @@ WantedBy=multi-user.target
 | *(new)* `RABBITMQ_URL` | `/etc/vl/config.env` | `amqp://vl:pass@rabbit:5672/vl` |
 | *(new)* `DISPATCH_BACKEND` | `/etc/vl/config.env` | `dramatiq` (during P4), `argo` (pre-cutover), `dual` (P2/P3) |
 | *(new)* `VL_DISPATCH_QUEUE_OVERRIDES` | `/etc/vl/config.env` | JSON map for runtime queue routing overrides |
+
+---
+
+## Appendix D — Per-Pipe File Changes & Code
+
+This appendix enumerates, per pipe, the **exact files to create or modify** plus the **ready-to-paste code**. Paths are relative to the repo root (`c:/visual layer/vl-camtek/`). Code assumes the new package `clustplorer/logic/dispatch/` has been created (see D.0 below).
+
+### D.0 — Shared scaffolding (create once, used by all pipes)
+
+**Files to ADD:**
+
+| Path | Purpose |
+|---|---|
+| `clustplorer/logic/dispatch/__init__.py` | Package root, exports `trigger_pipeline` |
+| `clustplorer/logic/dispatch/broker.py` | RabbitMQ broker singleton |
+| `clustplorer/logic/dispatch/actors.py` | All Dramatiq actor definitions |
+| `clustplorer/logic/dispatch/middleware.py` | `on_success` / `on_failure` exit-handler middleware |
+| `clustplorer/logic/dispatch/routing.py` | Queue + priority routing logic |
+| `clustplorer/logic/dispatch/abort.py` | `dramatiq-abort` wrapper |
+
+**Files to UPDATE:**
+
+| Path | Change |
+|---|---|
+| `pyproject.toml` | add `dramatiq[rabbitmq,watch] ~= 1.17`, `dramatiq-abort ~= 1.2` |
+| `vl/common/settings.py` | add `RABBITMQ_URL`, `DISPATCH_BACKEND`, `ABORT_BACKEND_URL` settings |
+
+**`clustplorer/logic/dispatch/broker.py`:**
+
+```python
+"""Single broker instance used by all actors and the dispatcher."""
+from dramatiq.brokers.rabbitmq import RabbitmqBroker
+from dramatiq import set_broker
+from dramatiq_abort import Abortable, backends
+
+from vl.common.settings import Settings
+from clustplorer.logic.dispatch.middleware import ExitHandlerMiddleware
+
+_broker: RabbitmqBroker | None = None
+
+def get_broker() -> RabbitmqBroker:
+    global _broker
+    if _broker is None:
+        _broker = RabbitmqBroker(url=Settings.RABBITMQ_URL)
+        abort_backend = backends.RedisBackend(url=Settings.ABORT_BACKEND_URL)
+        _broker.add_middleware(Abortable(backend=abort_backend))
+        _broker.add_middleware(ExitHandlerMiddleware())
+        set_broker(_broker)
+    return _broker
+```
+
+**`clustplorer/logic/dispatch/middleware.py`:**
+
+```python
+"""Dramatiq middleware replacing Argo onExit handlers."""
+import dramatiq
+from dramatiq.middleware import Middleware
+
+from vl.common.logging_init import get_vl_logger
+
+logger = get_vl_logger(__name__)
+
+class ExitHandlerMiddleware(Middleware):
+    """Maps to Argo's onExit template: dispatches post_success/post_error actors."""
+
+    def after_process_message(self, broker, message, *, result=None, exception=None):
+        # Lazy import to avoid circular dep with actors module
+        from clustplorer.logic.dispatch.actors import run_post_success, run_post_error
+
+        task_id = message.args[0] if message.args else None
+        if not task_id:
+            return
+
+        if exception is None:
+            run_post_success.send(str(task_id))
+            logger.info(f"Enqueued post_success for task {task_id}")
+        else:
+            run_post_error.send(str(task_id), str(exception))
+            logger.error(f"Enqueued post_error for task {task_id}: {exception}")
+```
+
+**`clustplorer/logic/dispatch/routing.py`:**
+
+```python
+"""Queue selection + priority calculation. Replaces resource auto-sizing."""
+from typing import Any
+
+# Mirrors argo_pipeline_creator._compute_cpu_resources tiers, but returns a priority
+def priority_for_size(units: int) -> int:
+    if units < 1000:     return 9
+    if units < 10_000:   return 7
+    if units < 50_000:   return 5
+    if units < 100_000:  return 3
+    return 1
+
+def needs_gpu(enrichment_config: dict[str, Any] | None) -> bool:
+    if not enrichment_config:
+        return False
+    gpu_models = {
+        "CAPTION_IMAGES", "OBJECT_DETECTION", "IMAGE_TAGGING",
+        "XFER", "MULTIMODEL_ENCODING", "INSTANCE_RETRIEVAL",
+    }
+    requested = set(enrichment_config.get("models", []) or [])
+    return bool(requested & gpu_models)
+```
+
+**`clustplorer/logic/dispatch/abort.py`:**
+
+```python
+"""Replacement for subprocess kubectl delete workflow."""
+from dramatiq_abort import abort
+
+def abort_task_dispatch(message_id: str) -> None:
+    """Request cancellation of an in-flight Dramatiq message."""
+    abort(message_id)
+```
+
+**`clustplorer/logic/dispatch/__init__.py`:**
+
+```python
+from .broker import get_broker
+from .routing import needs_gpu, priority_for_size
+from .abort import abort_task_dispatch
+from . import actors  # triggers actor registration
+
+__all__ = ["trigger_pipeline", "abort_task_dispatch", "needs_gpu", "priority_for_size"]
+
+def trigger_pipeline(
+    task_id, dataset_id, user_id, flow_type, enrichment_config=None,
+    size_units=0, extra_env=None,
+):
+    """Main entry point. Replaces ArgoPipeline.trigger_vl_argo_processing()."""
+    get_broker()  # ensure initialised
+    priority = priority_for_size(size_units)
+    gpu = needs_gpu(enrichment_config)
+    actor = actors.select_actor(flow_type, gpu)
+    extra = extra_env or {}
+    msg = actor.send_with_options(
+        args=(str(task_id), str(dataset_id), str(user_id)),
+        kwargs=extra,
+        priority=priority,
+    )
+    return msg.message_id
+```
+
+### D.1 — `full_pipeline_flow`
+
+**Files to ADD:** entries in `clustplorer/logic/dispatch/actors.py`
+
+**Files to UPDATE:**
+
+| Path | Change |
+|---|---|
+| `clustplorer/web/api_dataset_create_workflow.py` | Replace `ArgoPipeline.trigger_vl_argo_processing(...)` call with `dispatch.trigger_pipeline(...)` |
+| `clustplorer/logic/argo_pipeline/argo_pipeline.py` | Route through `dispatch.trigger_pipeline` when `Settings.DISPATCH_BACKEND == "dramatiq"` |
+
+**Actor code (append to `actors.py`):**
+
+```python
+import os
+import dramatiq
+
+from pipeline.controller.pipeline_flows import full_dataset_pipeline_flow
+from vl.common.settings import Settings
+
+def _set_env(task_id, dataset_id, user_id, flow_type, **kwargs):
+    os.environ["FLOW_RUN_ID"] = str(task_id)
+    os.environ["DATASET_ID"] = str(dataset_id)
+    os.environ["USER_ID"] = str(user_id)
+    os.environ["PIPELINE_FLOW_TYPE"] = flow_type
+    for k, v in kwargs.items():
+        os.environ[k.upper()] = str(v)
+
+@dramatiq.actor(
+    queue_name="cpu.pipeline",
+    max_retries=3, min_backoff=30_000, max_backoff=600_000,
+    time_limit=4 * 3600 * 1000,
+)
+def run_full_pipeline_cpu(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, "PIPELINE", **env)
+    full_dataset_pipeline_flow()
+
+@dramatiq.actor(
+    queue_name="gpu.pipeline",
+    max_retries=3, min_backoff=30_000, max_backoff=600_000,
+    time_limit=6 * 3600 * 1000,
+)
+def run_full_pipeline_gpu(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, "PIPELINE", **env)
+    full_dataset_pipeline_flow()
+```
+
+**API wiring update** in `api_dataset_create_workflow.py`:
+
+```python
+# Before:
+# workflow_name = ArgoPipeline.trigger_vl_argo_processing(
+#     dataset_id=dataset_id, user_id=user_id, task_id=task_id, ...)
+
+# After:
+from clustplorer.logic.dispatch import trigger_pipeline
+message_id = trigger_pipeline(
+    task_id=task_id,
+    dataset_id=dataset_id,
+    user_id=user_id,
+    flow_type="PIPELINE",
+    enrichment_config=enrichment_config,
+    size_units=size_units,
+)
+# Persist message_id into tasks.metadata_ (replaces metadata_.workflow_name)
+await repo.update_task_metadata(task_id, {"message_id": message_id})
+```
+
+### D.2 — `prepare_data_flow`
+
+CPU sub-step. Only reachable when parent multi-step pipeline explicitly chains it. In the new design, multi-step chaining is done **inside a single actor** via direct Python calls, so `prepare_data_flow` does not need its own actor for the main dispatch path.
+
+**Files to UPDATE:** none for direct triggering.
+
+**Optional ADD** — if you want a standalone "prep only" debug actor:
+
+```python
+from pipeline.controller.pipeline_flows import prepare_data_flow
+
+@dramatiq.actor(queue_name="cpu.default", max_retries=1, time_limit=2 * 3600 * 1000)
+def run_prepare_data(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, env.get("pipeline_flow_type", "PIPELINE"), **env)
+    prepare_data_flow()
+```
+
+### D.3 — `enrichment_flow`
+
+**Files to ADD:** actor entry in `actors.py`
+
+**Files to UPDATE:** `clustplorer/logic/datasets_bl.py` — `PipelineFlowType.ENRICHMENT` branch dispatches to new actor.
+
+**Actor:**
+
+```python
+from pipeline.controller.pipeline_flows import enrichment_flow
+
+@dramatiq.actor(
+    queue_name="gpu.enrichment",
+    max_retries=2, min_backoff=60_000, max_backoff=1_800_000,
+    time_limit=4 * 3600 * 1000,
+)
+def run_enrichment(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, "ENRICHMENT", **env)
+    enrichment_flow()
+```
+
+**Call-site update in `datasets_bl.py`:**
+
+```python
+# Replace ArgoPipeline.trigger_vl_argo_processing(flow_type=ENRICHMENT, ...)
+from clustplorer.logic.dispatch import trigger_pipeline
+message_id = trigger_pipeline(
+    task_id=task_id, dataset_id=dataset_id, user_id=user_id,
+    flow_type="ENRICHMENT", enrichment_config=enrichment_config,
+    size_units=size_units,
+)
+```
+
+### D.4 — `indexer_flow`
+
+CPU. Like `prepare_data_flow`, internal to multi-step. No dedicated actor unless standalone run needed.
+
+**Optional actor** (in `actors.py`):
+
+```python
+from pipeline.controller.pipeline_flows import indexer_flow
+
+@dramatiq.actor(queue_name="cpu.indexer", max_retries=2, time_limit=3 * 3600 * 1000)
+def run_indexer(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, env.get("pipeline_flow_type", "PIPELINE"), **env)
+    indexer_flow()
+```
+
+### D.5 — `partial_update_flow`
+
+**Files to ADD:** two actors (CPU + GPU variants).
+
+**Files to UPDATE:**
+
+| Path | Change |
+|---|---|
+| `clustplorer/web/api_add_media.py` | `_process_add_media` dispatches via `trigger_pipeline(flow_type="PARTIAL_UPDATE", ...)` |
+| `clustplorer/logic/argo_pipeline/argo_pipeline.py` | Remove `create_combined_partial_update_reindex_workflow` branch once cut over |
+
+**Actors:**
+
+```python
+from pipeline.controller.pipeline_flows import partial_update_flow
+
+@dramatiq.actor(queue_name="cpu.pipeline", max_retries=3, time_limit=3 * 3600 * 1000)
+def run_partial_update_cpu(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, "PARTIAL_UPDATE", **env)
+    partial_update_flow()
+
+@dramatiq.actor(queue_name="gpu.pipeline", max_retries=3, time_limit=5 * 3600 * 1000)
+def run_partial_update_gpu(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, "PARTIAL_UPDATE", **env)
+    partial_update_flow()
+```
+
+### D.6 — `reindex_dataset_flow`
+
+**Files to ADD:** actor entries.
+
+**Files to UPDATE:** `clustplorer/web/api_add_media.py` — `/reindex` endpoint calls `trigger_pipeline(flow_type="REINDEX", ...)`.
+
+**Actors:**
+
+```python
+from pipeline.controller.pipeline_flows import reindex_dataset_flow
+
+@dramatiq.actor(queue_name="cpu.reindex", max_retries=2, time_limit=4 * 3600 * 1000)
+def run_reindex_cpu(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, "REINDEX", **env)
+    reindex_dataset_flow()
+
+@dramatiq.actor(queue_name="gpu.reindex", max_retries=2, time_limit=6 * 3600 * 1000)
+def run_reindex_gpu(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, "REINDEX", **env)
+    reindex_dataset_flow()
+```
+
+### D.7 — `restore_dataset_flow`
+
+**Files to ADD:** actor entry.
+
+**Files to UPDATE:** `clustplorer/web/api_dataset_snapshots.py` — `/restore` and `/clone` endpoints dispatch to new actor. Must pass `SNAPSHOT_DATASET_ID`, `SNAPSHOT_DATASET_REVISION_ID` via `extra_env`.
+
+**Actor:**
+
+```python
+from pipeline.controller.pipeline_flows import restore_dataset_flow
+
+@dramatiq.actor(queue_name="cpu.default", max_retries=2, time_limit=3600 * 1000)
+def run_restore(task_id, dataset_id, user_id, snapshot_dataset_id, snapshot_revision_id, **env):
+    _set_env(
+        task_id, dataset_id, user_id, "RESTORE",
+        snapshot_dataset_id=snapshot_dataset_id,
+        snapshot_dataset_revision_id=snapshot_revision_id,
+        **env,
+    )
+    restore_dataset_flow()
+```
+
+**Call-site:**
+
+```python
+from clustplorer.logic.dispatch import trigger_pipeline
+message_id = trigger_pipeline(
+    task_id=task_id, dataset_id=dataset_id, user_id=user_id,
+    flow_type="RESTORE",
+    extra_env={
+        "snapshot_dataset_id": snapshot_dataset_id,
+        "snapshot_revision_id": snapshot_revision_id,
+    },
+)
+```
+
+### D.8 — `nop_flow`
+
+**Files to ADD:** actor entry (optional — helpful for smoke tests through the full stack).
+
+```python
+from pipeline.controller.pipeline_flows import nop_flow
+
+@dramatiq.actor(queue_name="cpu.default", max_retries=0, time_limit=60_000)
+def run_nop(task_id="smoke-test", dataset_id="n/a", user_id="n/a"):
+    _set_env(task_id, dataset_id, user_id, "PIPELINE")
+    nop_flow()
+```
+
+**Ops smoke-test recipe:** `python -c "from clustplorer.logic.dispatch.actors import run_nop; run_nop.send()"` — verifies broker + worker end-to-end.
+
+### D.9 — `post_success_flow` and D.10 — `post_error_flow`
+
+These are triggered **by middleware**, not by the dispatcher. Defined once in `actors.py`, invoked by `ExitHandlerMiddleware` (see D.0).
+
+**Actors:**
+
+```python
+from pipeline.controller.pipeline_flows import post_success_flow, post_error_flow
+
+@dramatiq.actor(queue_name="cpu.default", max_retries=1, time_limit=600_000)
+def run_post_success(task_id):
+    _set_env(task_id, os.environ.get("DATASET_ID", ""), "", "PIPELINE")
+    post_success_flow()
+
+@dramatiq.actor(queue_name="cpu.default", max_retries=1, time_limit=600_000)
+def run_post_error(task_id, error_message):
+    os.environ["ERROR_MESSAGE"] = error_message
+    _set_env(task_id, os.environ.get("DATASET_ID", ""), "", "PIPELINE")
+    post_error_flow()
+```
+
+### D.11 — `model_training_flow`
+
+**Files to ADD:** `clustplorer/logic/dispatch/training_actor.py` (or add to `actors.py`).
+
+**Files to UPDATE:**
+
+| Path | Change |
+|---|---|
+| `clustplorer/web/api_dataset_model_training.py` | Replace `ModelTrainingArgoPipeline.trigger_model_training_argo_workflow(...)` with `trigger_pipeline(flow_type="MODEL_TRAINING", ...)` |
+| `clustplorer/logic/model_training/model_training_argo_pipeline.py` | Deprecate; keep stub routing to dispatch during P2/P3 |
+| `clustplorer/logic/model_training/model_training_argo_manager.py` | Remove in P4 |
+
+**Actor:**
+
+```python
+from pipeline.controller.pipeline_flows import model_training_flow
+
+@dramatiq.actor(
+    queue_name="cpu.default",
+    max_retries=3, min_backoff=60_000, max_backoff=900_000,
+    time_limit=2 * 3600 * 1000,
+)
+def run_model_training(task_id, dataset_id, user_id, **env):
+    _set_env(task_id, dataset_id, user_id, "MODEL_TRAINING", **env)
+    model_training_flow()
+```
+
+### D.12 — Flywheel (bonus)
+
+**Files to UPDATE:** `clustplorer/logic/flywheel/flywheel_runner_argo_manager.py` becomes a thin wrapper around a Dramatiq actor with self-enqueueing.
+
+```python
+from pipeline.controller.pipeline_flows import full_dataset_pipeline_flow  # or flywheel-specific entry
+from clustplorer.logic.dispatch import trigger_pipeline
+
+@dramatiq.actor(queue_name="cpu.default", max_retries=2, time_limit=4 * 3600 * 1000)
+def run_flywheel_iteration(task_id, dataset_id, user_id, iteration=0, max_iterations=5, **env):
+    _set_env(task_id, dataset_id, user_id, "PIPELINE", **env)
+    # ... run one active-learning cycle ...
+    if iteration + 1 < max_iterations and _should_continue(task_id):
+        run_flywheel_iteration.send_with_options(
+            args=(task_id, dataset_id, user_id),
+            kwargs={"iteration": iteration + 1, "max_iterations": max_iterations, **env},
+            delay=30_000,  # 30-s pause between iterations
+        )
+```
+
+### D.13 — Actor selector
+
+Added to `actors.py` after all actor definitions:
+
+```python
+_ACTOR_MAP = {
+    ("PIPELINE",       False): run_full_pipeline_cpu,
+    ("PIPELINE",       True):  run_full_pipeline_gpu,
+    ("PARTIAL_UPDATE", False): run_partial_update_cpu,
+    ("PARTIAL_UPDATE", True):  run_partial_update_gpu,
+    ("REINDEX",        False): run_reindex_cpu,
+    ("REINDEX",        True):  run_reindex_gpu,
+    ("ENRICHMENT",     True):  run_enrichment,
+    ("RESTORE",        False): run_restore,
+    ("MODEL_TRAINING", False): run_model_training,
+}
+
+def select_actor(flow_type: str, gpu: bool):
+    key = (flow_type, gpu)
+    if key not in _ACTOR_MAP:
+        # Fallback: flow_type exists for CPU even if GPU requested
+        key = (flow_type, False)
+    return _ACTOR_MAP[key]
+```
+
+### D.14 — Abort call-site update
+
+**File to UPDATE:** `vl/tasks/dataset_creation/dataset_creation_task_service.py`
+
+```python
+# Before (lines ~237-261):
+# def _terminate_argo_workflow(workflow_name: str) -> None:
+#     subprocess.run(["kubectl", "delete", "workflow", workflow_name, ...])
+
+# After:
+from clustplorer.logic.dispatch import abort_task_dispatch
+
+@staticmethod
+def _terminate_dispatched_task(message_id: str) -> None:
+    try:
+        abort_task_dispatch(message_id)
+        logger.info(f"Requested abort of dispatched message {message_id}")
+    except Exception as e:
+        raise TaskWorkflowTerminationError(f"Failed to abort {message_id}: {e}")
+```
+
+Update the call-site in `abort_task` to read `metadata_.message_id` instead of `metadata_.workflow_name`.
+
+### D.15 — File-change summary table
+
+| Pipe | Files to ADD | Files to UPDATE |
+|---|---|---|
+| D.0 scaffolding | `dispatch/__init__.py`, `dispatch/broker.py`, `dispatch/actors.py`, `dispatch/middleware.py`, `dispatch/routing.py`, `dispatch/abort.py` | `pyproject.toml`, `vl/common/settings.py` |
+| D.1 full_pipeline | actors in `actors.py` | `clustplorer/web/api_dataset_create_workflow.py`, `clustplorer/logic/argo_pipeline/argo_pipeline.py` |
+| D.2 prepare_data | optional actor | — |
+| D.3 enrichment | actor | `clustplorer/logic/datasets_bl.py` |
+| D.4 indexer | optional actor | — |
+| D.5 partial_update | two actors | `clustplorer/web/api_add_media.py`, `argo_pipeline.py` |
+| D.6 reindex | two actors | `clustplorer/web/api_add_media.py` |
+| D.7 restore | actor | `clustplorer/web/api_dataset_snapshots.py` |
+| D.8 nop | actor | — |
+| D.9/10 post_success/error | two actors | wired via middleware automatically |
+| D.11 model_training | actor | `clustplorer/web/api_dataset_model_training.py`, `model_training_argo_pipeline.py` |
+| D.12 flywheel | actor | `clustplorer/logic/flywheel/flywheel_runner_argo_manager.py` |
+| D.14 abort | — | `vl/tasks/dataset_creation/dataset_creation_task_service.py` |
+
+**P4 deletions:**
+
+- `clustplorer/logic/argo_pipeline/argo_pipeline_creator.py`
+- `clustplorer/logic/argo_pipeline/argo_pipeline.py`
+- `clustplorer/logic/common/hera_utils.py`
+- `clustplorer/logic/model_training/model_training_argo_manager.py`
+- `clustplorer/logic/flywheel/flywheel_runner_argo_manager.py`
+- `pyproject.toml` — remove `hera`, `kubernetes` dependencies
+
+---
+
+## Appendix E — Deployment Plan
+
+Step-by-step rollout from a greenfield on-prem site to serving traffic. Written for a platform engineer to execute; assumes Ansible control node exists.
+
+### E.1 — Pre-flight checklist
+
+- [ ] IP plan approved (edge/api/db/broker/worker/storage/monitor VLANs)
+- [ ] DNS entries reserved (`vl.internal`, `rabbit.vl.internal`, `pg.vl.internal`, etc.)
+- [ ] TLS cert available (corporate CA or Let's Encrypt via DNS-01)
+- [ ] Base OS image hardened (Ubuntu 22.04 LTS or RHEL 9 recommended)
+- [ ] NTP configured on all hosts (critical for PG replication + message TTLs)
+- [ ] Internal PyPI mirror / wheel repository available
+- [ ] Internal container registry available (if using Docker Compose variant)
+- [ ] Firewall rules pre-approved (see E.8)
+
+### E.2 — Stage 1: Infrastructure bring-up
+
+```
+Day 0 - Storage layer
+  1. Provision storage VM (16 CPU / 64 GiB / 20 TB HDD + 2 TB NVMe for cache)
+  2. Install ZFS or MD-RAID; create /mnt/vl/{models,duckdb,csv-exports,
+     model-output,ground-truth,data}
+  3. Install NFS server; export with sec=sys, no_root_squash for workers
+  4. Install MinIO (single-node, TLS); create buckets vl-media, vl-snapshots
+  5. Smoke test: mount NFS from a test VM, read/write 1 GiB
+
+Day 0 - Database layer
+  6. Provision db VMs (primary + standby)
+  7. Install PostgreSQL 15, enable WAL archiving to NFS
+  8. Run existing vldbmigration to create schema
+  9. Install OpenFGA, point at PG; import model
+ 10. Install Keycloak in HA pair, point at PG
+
+Day 1 - Broker layer
+ 11. Provision broker VM(s) - single for pilot, 3-node cluster for prod
+ 12. Install RabbitMQ with management + prometheus plugins
+ 13. Enable publisher-confirms, quorum queues for production queues
+ 14. Load rabbitmq_definitions.json (vhost /vl, exchanges, queues, policies)
+ 15. Create operator + application users; disable guest
+ 16. Smoke test: rabbitmqadmin publish/get on cpu.default
+```
+
+### E.3 — Stage 2: Application bring-up
+
+```
+Day 2 - Workers
+ 17. Provision cpu-worker VMs (start with 2)
+ 18. Install system deps (build-essential, ffmpeg, libpq, python3.10)
+ 19. Mount /mnt/vl via autofs
+ 20. Install application wheel: pip install vl_camtek==X.Y.Z
+ 21. Drop /etc/vl/config.env and /etc/vl/secrets.env from Vault/SOPS
+ 22. Install vl-cpu-worker@.service and vl-gpu-worker@.service units
+ 23. systemctl enable --now vl-cpu-worker@1
+ 24. Verify with: dramatiq-test-publish; journalctl -u vl-cpu-worker@1
+ 25. Provision gpu-worker VMs, install NVIDIA drivers + CUDA (match prod
+     version pinned in GPU image)
+ 26. Verify GPU visible: nvidia-smi from vl user
+ 27. systemctl enable --now vl-gpu-worker@1
+
+Day 3 - API
+ 28. Provision api VMs (3x for HA)
+ 29. Install wheel; same config files
+ 30. Install vl-api@.service; enable 3 instances per VM (ports 9901-9903)
+ 31. Smoke test /healthz endpoint locally
+
+Day 3 - Edge
+ 32. Provision edge VMs (2x active/passive)
+ 33. Install nginx + keepalived
+ 34. Deploy vhosts: / -> FE static, /api -> api upstream, /image -> image-proxy
+ 35. Install TLS cert; redirect 80 -> 443
+ 36. Configure keepalived VRRP on shared VIP
+ 37. Smoke test curl https://vl.internal/api/v1/healthz
+```
+
+### E.4 — Stage 3: Monitoring & backups
+
+```
+Day 4 - Monitoring
+ 38. Provision monitor VM
+ 39. Install Prometheus, Grafana, Loki
+ 40. Deploy node_exporter on every VM
+ 41. Deploy rabbitmq_exporter, postgres_exporter, nvidia_gpu_exporter
+ 42. Import existing Grafana dashboards from git
+ 43. Wire Alertmanager -> Slack/PagerDuty
+ 44. Verify queue_depth panel populated
+
+Day 4 - Backups
+ 45. Install pgBackRest on db primary; configure stanza
+ 46. Schedule full weekly + incremental daily + continuous WAL archive
+ 47. Install ZFS snapshot cron (hourly + daily rotation)
+ 48. Configure mc mirror for MinIO; test restore-from-snapshot
+ 49. Validate backups by restoring the full DB to a throwaway VM
+```
+
+### E.5 — Stage 4: Pilot traffic
+
+```
+Day 5
+ 50. Flip VL_DISPATCH_BACKEND__NOP_FLOW = dramatiq for staging tenant only
+ 51. Invoke nop_flow via smoke-test: expect task COMPLETED in <5 s
+ 52. Flip VL_DISPATCH_BACKEND__RESTORE = dramatiq for staging
+ 53. Run /restore on a small test snapshot - verify SAVING -> READY
+ 54. Let these two pipes run for 48 h under continuous monitoring
+ 55. Review metrics: queue wait, actor duration, error rate, memory usage
+```
+
+### E.6 — Stage 5: Progressive cutover
+
+```
+Day 7-14
+ 56. Flip INDEXER, PREPARE_DATA, ENRICHMENT, REINDEX (one per day, watch 24h)
+ 57. Flip PARTIAL_UPDATE
+ 58. Flip MODEL_TRAINING
+ 59. Flip FULL_PIPELINE last (most traffic, most risk)
+ 60. Watch for: duplicate-execution, abort failures, DLX buildup, GPU OOM
+
+Day 15+
+ 61. Mark P3 complete when all pipes green for 7 consecutive days
+ 62. Start P4 in week 3: remove argo_pipeline/* code, remove Hera dep
+ 63. Decommission K8s cluster at day 30
+```
+
+### E.7 — Stage 6: Decommission (P4)
+
+- Remove Argo code modules (see D.15 P4 deletions)
+- Remove `kubernetes`, `hera` from `pyproject.toml`
+- Remove `devops/visual-layer/`, `devops/dependants/argo-workflows/` from the repo (or keep in `deprecated/` for one release)
+- Archive K8s cluster backups; shutdown control plane
+- Repurpose K8s worker nodes as additional cpu-worker/gpu-worker VMs
+
+### E.8 — Network / firewall matrix
+
+| Source | Destination | Port | Protocol |
+|---|---|---|---|
+| edge | api | 9901-9903 | TCP |
+| api | db (pg) | 5432 | TCP |
+| api | broker | 5672 | AMQP |
+| api | openfga | 8080 | TCP |
+| api | keycloak | 8443 | HTTPS |
+| workers | broker | 5672 | AMQP |
+| workers | db (pg) | 5432 | TCP |
+| workers | storage (NFS) | 2049 | TCP/UDP |
+| workers | minio | 9000 | HTTPS |
+| workers | external (Camtek training API) | 443 | HTTPS |
+| monitor | all hosts | 9100 (node_exporter) | TCP |
+| monitor | broker | 15692 (rabbitmq exporter) | TCP |
+| monitor | db | 9187 (postgres exporter) | TCP |
+| monitor | gpu-workers | 9835 (nvidia exporter) | TCP |
+| operators | edge | 443 | HTTPS |
+| operators | broker | 15672 (mgmt UI) | HTTPS |
+| operators | monitor | 3000 (Grafana) | HTTPS |
+
+### E.9 — Go-live criteria
+
+A deployment is "production-ready" when ALL of the following hold for 7 consecutive days:
+
+1. Nightly full_pipeline_flow smoke succeeds on a 10k-image dataset
+2. Nightly enrichment_flow smoke succeeds on GPU pool
+3. Zero messages stuck in DLX at morning check (or root-caused and retried)
+4. All Prometheus alerts quiet (or intentionally acknowledged)
+5. Backup restore drill succeeded in the past 30 days
+6. p95 API latency < 500 ms
+7. p95 queue wait on `cpu.pipeline` < 60 s during business hours
+8. At least one planned rolling deploy executed with zero task loss
+
+---
+
+## Appendix F — VM Hardware Specification
+
+Target: moderate-size Camtek deployment (~5 concurrent pipelines peak, ~50 dataset creations/day, max dataset ~100k images).
+
+All VMs: Ubuntu 22.04 LTS or RHEL 9, ext4 or XFS on root, separate LVM volume for `/var/lib`, swap disabled on worker VMs (OOM-kill is preferable to swap thrashing during ML jobs).
+
+### F.1 — edge VM (nginx)
+
+| Attribute | Spec |
+|---|---|
+| Count | 2 (active/passive via keepalived VRRP) |
+| vCPU | 4 |
+| RAM | 8 GiB |
+| Disk | 40 GiB SSD (OS + logs) |
+| Network | 2x 1 Gbps (bonded) |
+| GPU | none |
+| Notes | Stateless; snapshots not needed |
+
+### F.2 — api VM (FastAPI `clustplorer`)
+
+| Attribute | Spec |
+|---|---|
+| Count | 3 |
+| vCPU | 8 |
+| RAM | 16 GiB |
+| Disk | 80 GiB SSD |
+| Network | 2x 10 Gbps |
+| GPU | none |
+| Notes | Stateless. Each VM runs 3 uvicorn instances (4 workers each) = 12 workers/VM, 36 total |
+
+### F.3 — db VM (PostgreSQL primary + standby)
+
+| Attribute | Spec |
+|---|---|
+| Count | 2 (primary + streaming standby) |
+| vCPU | 16 |
+| RAM | 64 GiB (shared_buffers = 16 GiB, effective_cache_size = 48 GiB) |
+| Disk | 2 TiB NVMe for `$PGDATA`; 4 TiB HDD for WAL archive |
+| Network | 2x 10 Gbps |
+| GPU | none |
+| Notes | Enable `hot_standby=on`, `max_wal_senders=4`, `wal_level=replica` |
+
+### F.4 — broker VM (RabbitMQ)
+
+| Attribute | Spec |
+|---|---|
+| Count | 3 (quorum queues require odd cluster size) |
+| vCPU | 4 |
+| RAM | 8 GiB (`vm_memory_high_watermark = 0.6`) |
+| Disk | 200 GiB SSD (message persistence) |
+| Network | 2x 10 Gbps |
+| GPU | none |
+| Notes | Enable management, prometheus, shovel plugins |
+
+### F.5 — cpu-worker VM
+
+Two tiers; stepped capacity to handle the resource-tier mapping from `argo_pipeline_creator._compute_cpu_resources`.
+
+#### F.5.a — cpu-worker-standard (most pipelines)
+
+| Attribute | Spec |
+|---|---|
+| Count | N >= 4 |
+| vCPU | 16 |
+| RAM | 64 GiB |
+| Disk | 500 GiB NVMe for `/var/lib/vl/datasets-staging` + 50 GiB OS |
+| Network | 2x 10 Gbps |
+| GPU | none |
+| Queues subscribed | `cpu.default`, `cpu.pipeline`, `cpu.indexer`, `cpu.reindex` |
+| Notes | Handles datasets up to ~50k units. `prefetch_count=1` |
+
+#### F.5.b — cpu-worker-large (handles >50k unit datasets)
+
+| Attribute | Spec |
+|---|---|
+| Count | N >= 2 |
+| vCPU | 32 |
+| RAM | 128 GiB |
+| Disk | 2 TiB NVMe staging + 50 GiB OS |
+| Network | 2x 25 Gbps |
+| GPU | none |
+| Queues subscribed | `cpu.pipeline.large`, `cpu.reindex.large` |
+| Notes | Sized for the top argo_pipeline resource tier (`>=100k` units, 16 CPU / 128 GiB in K8s) |
+
+### F.6 — gpu-worker VM
+
+#### F.6.a — gpu-worker-standard
+
+| Attribute | Spec |
+|---|---|
+| Count | M >= 2 |
+| vCPU | 8 |
+| RAM | 32 GiB |
+| Disk | 500 GiB NVMe |
+| Network | 2x 10 Gbps |
+| GPU | 1x NVIDIA L4 / T4 / A10 (24 GiB VRAM) |
+| Queues subscribed | `gpu.enrichment`, `gpu.pipeline`, `gpu.reindex` |
+| Notes | `nvidia-container-toolkit` if containerised; driver version pinned |
+
+#### F.6.b — gpu-worker-xfer (model fine-tuning)
+
+| Attribute | Spec |
+|---|---|
+| Count | 1 (initially) |
+| vCPU | 32 |
+| RAM | 128 GiB |
+| Disk | 2 TiB NVMe |
+| Network | 2x 25 Gbps |
+| GPU | 1x NVIDIA A100 / H100 (40-80 GiB VRAM) |
+| Queues subscribed | `gpu.pipeline.xfer` |
+| Notes | Sized for XFER path (14 CPU / 96 GiB in K8s) |
+
+### F.7 — storage VM (NFS + MinIO)
+
+| Attribute | Spec |
+|---|---|
+| Count | 1 (can split NFS and MinIO into 2 VMs) |
+| vCPU | 16 |
+| RAM | 64 GiB (ZFS ARC cache) |
+| Disk | 2 TiB NVMe (cache) + 20 TiB HDD (RAID-Z2 or hardware RAID-6) |
+| Network | 2x 25 Gbps (critical — shared-storage bottleneck) |
+| GPU | none |
+| Notes | Exports: `/mnt/vl/models` (28+ GiB), `/mnt/vl/duckdb` (100+ GiB), `/mnt/vl/data` (1 TiB hot), `/mnt/vl/snapshots` (5+ TiB cold) |
+
+### F.8 — monitor VM
+
+| Attribute | Spec |
+|---|---|
+| Count | 1 |
+| vCPU | 8 |
+| RAM | 32 GiB |
+| Disk | 1 TiB SSD (metrics + logs retention) |
+| Network | 2x 10 Gbps |
+| GPU | none |
+| Notes | Prometheus, Grafana, Loki, Alertmanager, pgbackrest repo client |
+
+### F.9 — Totals (minimum vs. production-grade)
+
+| Profile | VMs | Total vCPU | Total RAM | Total storage |
+|---|---|---|---|---|
+| **Minimum (pilot)** | 1 edge, 1 api, 1 db, 1 broker, 2 cpu-worker-std, 1 gpu-worker-std, 1 storage, 1 monitor | 68 | 232 GiB | ~25 TiB |
+| **Production** | 2 edge, 3 api, 2 db, 3 broker, 4 cpu-std + 2 cpu-large, 2 gpu-std + 1 gpu-xfer, 1 storage, 1 monitor | 240 | 800 GiB | ~40 TiB |
+
+### F.10 — Scale-out notes
+
+- **First scale signal = queue depth.** Add cpu-worker-standard VMs before any other tier.
+- **Second scale signal = GPU queue depth.** Provision gpu-worker-standard VMs.
+- **Third scale signal = DB contention.** Before scaling the primary, confirm connection-pool (pgbouncer) is healthy.
+- **Storage scaling:** move from single NFS to Ceph/GlusterFS when aggregate read throughput exceeds ~2 GiB/s sustained.
 
 ---
 
