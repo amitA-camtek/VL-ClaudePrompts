@@ -1,6 +1,6 @@
 # Phase C – Implementation Plan
 
-> **Feature:** Defect Crop Viewer — intermediate stage between ScanResult selection and dataset export  
+> **Feature:** Defect Crop Viewer — post-export review stage with configuration form shown after dataset creation  
 > **Stack:** FastAPI (Python) + React 18 (TypeScript)
 
 ---
@@ -15,13 +15,36 @@
 [User] selects 1+ scan results in /scan-results table
           │
           ▼
-[Click "Export to VL Dataset"]  ← button onClick now opens crop viewer
+[Click "Export to VL Dataset"]  ← button onClick opens ExportDatasetModal (UNCHANGED)
           │
           ▼
-  DefectCropViewer modal opens
+  ExportDatasetModal opens  (UNCHANGED existing flow)
+          │
+          ▼
+[User fills dataset name + path → Create Dataset]
+          │
+          ▼
+POST /api/v1/scan-results/export-dataset  (UNCHANGED)
+          │
+          ▼
+[Dataset created successfully]
+          │
+          ▼
+  On success callback → CropConfigForm opens automatically
+          │
+          ├── User configures:
+          │     eps slider (cluster radius, μm)
+          │     pad slider (crop padding, px)
+          │     OClass filter checkboxes
+          │     Recipe filter checkboxes
+          │     Max images per cluster
+          │     Thumbnail size
+          │
+          ▼
+[Click "Apply & View Crops"]
           │
           ├──► GET /api/v1/scan-results/defect-clusters
-          │         ?path={scan_path}&eps=300&pad=64
+          │         ?path={scan_path}&eps={form.eps}&pad={form.pad}
           │
           │    [Backend: api_defect_crops.py]
           │    load_defects(path)
@@ -44,7 +67,7 @@
           │    }
           │
           ▼
-  React renders:
+  React renders DefectCropViewer:
     WaferMap (canvas, defect dots)
     ClusterGrid (CropTile per cluster)
         CropTile:
@@ -57,22 +80,11 @@
           │       ?scan_path={base}&rel={images/lot_01/file.jpeg}
           │   [Backend: secure path validation + FileResponse + CORS]
           │
-  User adjusts eps slider  ← debounced 400ms (BUG_RC fix)
   User reviews cluster panels
           │
-          ▼
-[Click "Confirm & Create Dataset"]
+          ├── [← Back to Form] → return to CropConfigForm (values preserved)
           │
-  ExportDatasetModal opens  (UNCHANGED)
-          │
-          ▼
-[User fills dataset name + path → Create Dataset]
-          │
-          ▼
-POST /api/v1/scan-results/export-dataset  (UNCHANGED)
-          │
-          ▼
-[Dataset created → View Dataset link → /dataset/{id}/data]
+          └── [← Back to Scan Results] → close everything → return to table
 ```
 
 ---
@@ -88,11 +100,11 @@ Backend:
 
 Frontend:
   fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/
-    index.tsx                                   Container (modal wrapper + layout)
+    index.tsx                                   Container (page wrapper + step navigation)
+    CropConfigForm.tsx                          Configuration form (shown after dataset creation)
     CropTile.tsx                                Single cluster tile (canvas + SVG)
     BoundingBoxOverlay.tsx                      SVG bounding box layer
     WaferMap.tsx                                Canvas wafer coordinate map
-    ClusteringControls.tsx                      Eps + pad sliders
     useDefectCrops.ts                           React Query hook
     style.module.scss                           SCSS styles
 
@@ -108,7 +120,7 @@ Backend:
 
 Frontend:
   fe/clustplorer/src/views/pages/ScanResults/index.tsx
-                                                +1 state variable + intercept button onClick
+                                                +1 state variable + ExportDatasetModal onSuccess callback change
 ```
 
 ---
@@ -1000,68 +1012,209 @@ export const WaferMap: React.FC<Props> = ({
 
 ---
 
-### 4.5 `index.tsx` — DefectCropViewer Container
+### 4.5 `CropConfigForm.tsx` — Configuration Form (Step 1)
+
+```typescript
+// fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/CropConfigForm.tsx
+import React from "react";
+import { Button, Checkbox, Slider, Tag } from "antd";
+import styles from "./style.module.scss";
+
+export interface CropFormValues {
+  eps: number;
+  pad: number;
+  selectedOClasses: number[];
+  selectedRecipes: string[];
+  maxPerCluster: number;
+  thumbnailSize: number;
+}
+
+const DEFAULT_VALUES: CropFormValues = {
+  eps: 300,
+  pad: 64,
+  selectedOClasses: [],   // empty = all selected
+  selectedRecipes: [],    // empty = all selected
+  maxPerCluster: 16,
+  thumbnailSize: 256,
+};
+
+// OClass categories available for filtering
+const OCLASS_OPTIONS = [
+  { value: 23, label: "Missing Bump", color: "#ff6b35" },
+  { value: 28, label: "Foreign Particle", color: "#ff4444" },
+  { value: 26, label: "Scratch/Damage", color: "#ffcc02" },
+  { value: 65, label: "Other", color: "#9b59b6" },
+];
+
+interface Props {
+  scanName: string;
+  totalDefects: number;        // from dataset creation result
+  availableRecipes: string[];  // populated from scan metadata
+  values: CropFormValues;
+  onChange: (values: CropFormValues) => void;
+  onApply: () => void;
+  onBack: () => void;
+}
+
+export const CropConfigForm: React.FC<Props> = ({
+  scanName, totalDefects, availableRecipes,
+  values, onChange, onApply, onBack,
+}) => {
+  const update = (partial: Partial<CropFormValues>) =>
+    onChange({ ...values, ...partial });
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.formPanel}>
+        {/* Header */}
+        <div className={styles.header}>
+          <Button onClick={onBack} className={styles.backBtn}>← Back to Scans</Button>
+          <span className={styles.title}>Configure Crop Review — {scanName}</span>
+        </div>
+
+        {/* Success badge */}
+        <div className={styles.successBadge}>
+          <Tag color="green">Dataset created</Tag>
+          <span>{totalDefects} defects exported</span>
+        </div>
+
+        {/* Clustering Parameters */}
+        <div className={styles.formSection}>
+          <h4>Clustering Parameters</h4>
+          <div className={styles.controlRow}>
+            <label>Cluster Radius: <strong>{values.eps} μm</strong></label>
+            <Slider min={50} max={2000} step={50} value={values.eps}
+                    onChange={(v) => update({ eps: v })} />
+          </div>
+          <div className={styles.controlRow}>
+            <label>Crop Padding: <strong>{values.pad} px</strong></label>
+            <Slider min={16} max={256} step={8} value={values.pad}
+                    onChange={(v) => update({ pad: v })} />
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className={styles.formSection}>
+          <h4>Filters</h4>
+          <div className={styles.controlRow}>
+            <label>OClass:</label>
+            <Checkbox.Group
+              options={OCLASS_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+              value={values.selectedOClasses.length ? values.selectedOClasses
+                     : OCLASS_OPTIONS.map(o => o.value)}
+              onChange={(checked) => update({ selectedOClasses: checked as number[] })}
+            />
+          </div>
+          {availableRecipes.length > 0 && (
+            <div className={styles.controlRow}>
+              <label>Recipe:</label>
+              <Checkbox.Group
+                options={availableRecipes.map(r => ({ label: r, value: r }))}
+                value={values.selectedRecipes.length ? values.selectedRecipes : availableRecipes}
+                onChange={(checked) => update({ selectedRecipes: checked as string[] })}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Display Options */}
+        <div className={styles.formSection}>
+          <h4>Display</h4>
+          <div className={styles.controlRow}>
+            <label>Max images per cluster: <strong>{values.maxPerCluster}</strong></label>
+            <Slider min={4} max={32} step={4} value={values.maxPerCluster}
+                    onChange={(v) => update({ maxPerCluster: v })} />
+          </div>
+          <div className={styles.controlRow}>
+            <label>Thumbnail size: <strong>{values.thumbnailSize}px</strong></label>
+            <Slider min={128} max={512} step={64} value={values.thumbnailSize}
+                    onChange={(v) => update({ thumbnailSize: v })} />
+          </div>
+        </div>
+
+        {/* Submit */}
+        <div className={styles.footerBar}>
+          <Button type="primary" size="large" onClick={onApply}>
+            Apply & View Crops
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export { DEFAULT_VALUES };
+```
+
+---
+
+### 4.6 `index.tsx` — DefectCropViewer Container (Two-Step: Form → Viewer)
 
 ```typescript
 // fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/index.tsx
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Alert, Button, Empty, Slider, Spin, Statistic } from "antd";
+import React, { useRef, useState } from "react";
+import { Alert, Button, Empty, Spin, Statistic } from "antd";
+import { CropConfigForm, CropFormValues, DEFAULT_VALUES } from "./CropConfigForm";
 import { CropTile } from "./CropTile";
 import { WaferMap } from "./WaferMap";
 import { useDefectCrops } from "./useDefectCrops";
 import styles from "./style.module.scss";
+
+type Step = "form" | "viewer";
 
 interface Props {
   open: boolean;
   scanPaths: string[];           // selected scan export folder paths
   scanName: string;              // display name
   onBack: () => void;
-  onConfirm: () => void;
-}
-
-// Minimal debounce hook (no extra dep)
-function useDebounced<T>(value: T, ms: number): T {
-  const [deb, setDeb] = useState(value);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  React.useEffect(() => {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setDeb(value), ms);
-    return () => clearTimeout(timer.current);
-  }, [value, ms]);
-  return deb;
 }
 
 export const DefectCropViewer: React.FC<Props> = ({
-  open, scanPaths, scanName, onBack, onConfirm,
+  open, scanPaths, scanName, onBack,
 }) => {
-  const [eps, setEps] = useState(300);
-  const [pad, setPad] = useState(64);
-  const debouncedEps = useDebounced(eps, 400);   // BUG_RC fix
-  const debouncedPad = useDebounced(pad, 400);
+  const [step, setStep] = useState<Step>("form");
+  const [formValues, setFormValues] = useState<CropFormValues>(DEFAULT_VALUES);
+  // Applied values: only sent to API when user clicks "Apply & View Crops"
+  const [appliedValues, setAppliedValues] = useState<CropFormValues | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<number>(0);
 
   // Use first path for now — multi-path support is a future enhancement
   const primaryPath = scanPaths[0] ?? null;
 
-  const { data, isLoading, error, isFetching } = useDefectCrops(
-    primaryPath, debouncedEps, debouncedPad,
+  // Only fetch when user has submitted the form (appliedValues !== null)
+  const { data, isLoading, error } = useDefectCrops(
+    appliedValues ? primaryPath : null,
+    appliedValues?.eps ?? 300,
+    appliedValues?.pad ?? 64,
   );
 
-  // Preserve scroll position across eps/pad changes (BUG11 fix)
-  const handleEpsChange = useCallback((val: number) => {
-    scrollRef.current = gridRef.current?.scrollTop ?? 0;
-    setEps(val);
-  }, []);
+  const handleApply = () => {
+    setAppliedValues({ ...formValues });
+    setStep("viewer");
+  };
 
-  React.useEffect(() => {
-    if (!isFetching && gridRef.current) {
-      gridRef.current.scrollTop = scrollRef.current;
-    }
-  }, [isFetching]);
+  const handleBackToForm = () => {
+    setStep("form");
+  };
 
   if (!open) return null;
 
+  // ── Step 1: Configuration Form ──
+  if (step === "form") {
+    return (
+      <CropConfigForm
+        scanName={scanName}
+        totalDefects={0}  // TODO: pass from dataset creation result
+        availableRecipes={[]}  // TODO: populate from scan metadata
+        values={formValues}
+        onChange={setFormValues}
+        onApply={handleApply}
+        onBack={onBack}
+      />
+    );
+  }
+
+  // ── Step 2: Crop Viewer ──
   const avgPerCluster = data && data.total_crops > 0
     ? (data.total_defects / data.total_crops).toFixed(1)
     : "—";
@@ -1071,8 +1224,8 @@ export const DefectCropViewer: React.FC<Props> = ({
       <div className={styles.viewer}>
         {/* Header */}
         <div className={styles.header}>
-          <Button onClick={onBack} className={styles.backBtn}>← Back</Button>
-          <span className={styles.title}>Preview Defect Crops — {scanName}</span>
+          <Button onClick={handleBackToForm} className={styles.backBtn}>← Back to Form</Button>
+          <span className={styles.title}>Review Defect Crops — {scanName}</span>
         </div>
 
         {/* Stats bar */}
@@ -1086,20 +1239,6 @@ export const DefectCropViewer: React.FC<Props> = ({
 
         {/* Message (e.g., "no defects found") */}
         {data?.message && <Alert type="info" message={data.message} className={styles.alert} />}
-
-        {/* Controls */}
-        <div className={styles.controls}>
-          <div className={styles.controlRow}>
-            <label>Cluster Radius: <strong>{eps} μm</strong></label>
-            <Slider min={50} max={2000} step={50} value={eps} onChange={handleEpsChange}
-                    className={styles.slider} />
-          </div>
-          <div className={styles.controlRow}>
-            <label>Crop Padding: <strong>{pad} px</strong></label>
-            <Slider min={16} max={256} step={8} value={pad} onChange={setPad}
-                    className={styles.slider} />
-          </div>
-        </div>
 
         {/* Main content */}
         <div className={styles.content}>
@@ -1132,6 +1271,7 @@ export const DefectCropViewer: React.FC<Props> = ({
                       defects={crop.defects}
                       defectCount={crop.defect_count}
                       recipeName={crop.recipe_name}
+                      tileSize={appliedValues?.thumbnailSize ?? 256}
                     />
                   );
                 })}
@@ -1142,11 +1282,8 @@ export const DefectCropViewer: React.FC<Props> = ({
 
         {/* Footer */}
         <div className={styles.footerBar}>
-          <Button size="large" onClick={onBack}>← Back</Button>
-          <Button type="primary" size="large" onClick={onConfirm}
-                  disabled={isLoading || !data}>
-            Confirm & Create Dataset →
-          </Button>
+          <Button size="large" onClick={handleBackToForm}>← Back to Form</Button>
+          <Button size="large" onClick={onBack}>← Back to Scan Results</Button>
         </div>
       </div>
     </div>
@@ -1156,7 +1293,7 @@ export const DefectCropViewer: React.FC<Props> = ({
 
 ---
 
-### 4.6 `style.module.scss`
+### 4.8 `style.module.scss`
 
 ```scss
 // fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/style.module.scss
@@ -1167,6 +1304,36 @@ export const DefectCropViewer: React.FC<Props> = ({
   display: flex; align-items: center; justify-content: center;
 }
 
+// ── CropConfigForm (Step 1) ──
+.formPanel {
+  background: var(--bg-primary, #1a1a2e);
+  border-radius: 12px;
+  width: 640px; max-width: 95vw;
+  max-height: 92vh;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+
+.successBadge {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-color, #2d2d44);
+  font-size: 14px; color: var(--text-primary, #e2e2e2);
+}
+
+.formSection {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color, #2d2d44);
+
+  h4 {
+    font-size: 13px; font-weight: 600;
+    color: var(--text-secondary, #888);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+}
+
+// ── DefectCropViewer (Step 2) ──
 .viewer {
   background: var(--bg-primary, #1a1a2e);
   border-radius: 12px;
@@ -1201,18 +1368,10 @@ export const DefectCropViewer: React.FC<Props> = ({
 
 .alert { margin: 8px 24px; }
 
-.controls {
-  display: flex; gap: 24px;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--border-color, #2d2d44);
-}
-
 .controlRow {
-  flex: 1;
+  margin-bottom: 12px;
   label { font-size: 13px; color: var(--text-secondary, #888); display: block; margin-bottom: 4px; }
 }
-
-.slider { width: 100%; }
 
 .content {
   display: flex; flex: 1; overflow: hidden;
@@ -1293,23 +1452,33 @@ export const DefectCropViewer: React.FC<Props> = ({
 
 ---
 
-### 4.7 Modify `ScanResults/index.tsx` — 3-line change
+### 4.7 Modify `ScanResults/index.tsx` — Wiring Change
 
 ```typescript
 // In fe/clustplorer/src/views/pages/ScanResults/index.tsx
 // EXISTING state (already present):
 // const [exportModalOpen, setExportModalOpen] = useState(false);
 
-// ADD: one new state variable
+// ADD: new state variable for crop viewer
 const [cropViewerOpen, setCropViewerOpen] = useState(false);
 
-// CHANGE: Export button onClick (was: setExportModalOpen(true))
-// OLD:
+// Export button onClick: UNCHANGED — still opens ExportDatasetModal
 <Button onClick={() => setExportModalOpen(true)}>Export to VL Dataset</Button>
-// NEW:
-<Button onClick={() => setCropViewerOpen(true)}>Export to VL Dataset</Button>
 
-// ADD: DefectCropViewer before the existing ExportDatasetModal
+// CHANGE: ExportDatasetModal onSuccess callback
+// OLD: onSuccess might navigate to dataset or close modal
+// NEW: on success → close modal → open crop viewer
+<ExportDatasetModal
+  open={exportModalOpen}
+  onClose={() => setExportModalOpen(false)}
+  onSuccess={() => {
+    setExportModalOpen(false);
+    setCropViewerOpen(true);   // dataset created → open form + viewer
+  }}
+  // ... other existing props unchanged
+/>
+
+// ADD: DefectCropViewer (shows form first, then viewer after form submit)
 import { DefectCropViewer } from "./DefectCropViewer";
 
 <DefectCropViewer
@@ -1317,13 +1486,7 @@ import { DefectCropViewer } from "./DefectCropViewer";
   scanPaths={selectedRows.map(r => r.path_to_files)}
   scanName={selectedRows[0]?.scan_process?.setup?.job_name ?? ""}
   onBack={() => setCropViewerOpen(false)}
-  onConfirm={() => {
-    setCropViewerOpen(false);
-    setExportModalOpen(true);   // hand off to existing unchanged modal
-  }}
 />
-
-// ExportDatasetModal: UNCHANGED, no modifications needed
 ```
 
 ---
@@ -1369,12 +1532,13 @@ from pathlib import Path
 TEMPLATES = {
     "clustplorer/web/api_defect_crops.py": "# See phase_C_implementation.md section 3.2\n",
     "vl/services/defect_clustering.py": "# See phase_C_implementation.md section 3.1\n",
-    "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/index.tsx": "// See phase_C_implementation.md section 4.5\n",
+    "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/index.tsx": "// See phase_C_implementation.md section 4.6\n",
+    "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/CropConfigForm.tsx": "// See phase_C_implementation.md section 4.5\n",
     "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/CropTile.tsx": "// See phase_C_implementation.md section 4.3\n",
     "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/BoundingBoxOverlay.tsx": "// See phase_C_implementation.md section 4.2\n",
     "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/WaferMap.tsx": "// See phase_C_implementation.md section 4.4\n",
     "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/useDefectCrops.ts": "// See phase_C_implementation.md section 4.1\n",
-    "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/style.module.scss": "// See phase_C_implementation.md section 4.6\n",
+    "fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/style.module.scss": "// See phase_C_implementation.md section 4.8\n",
 }
 
 INIT_IMPORT = "from clustplorer.web.api_defect_crops import router as defect_crops_router\n"
@@ -1426,7 +1590,7 @@ def scaffold(repo_root: Path) -> None:
     print("  2. Apply 3-line manual change to ScanResults/index.tsx (see section 4.7)")
     print("  3. Run backend: uvicorn clustplorer.web:app --reload")
     print("  4. Run frontend: cd fe/clustplorer && npm start")
-    print("  5. Test: navigate to /scan-results → select scan → click Export to VL Dataset")
+    print("  5. Test: navigate to /scan-results → select scan → Export → create dataset → configure form → Apply & View")
 
 
 if __name__ == "__main__":
@@ -1461,8 +1625,8 @@ python generate_feature.py --repo-root "c:/visual layer/vl-camtek"
 ### Step 2 — Frontend
 
 1. Create directory: `fe/clustplorer/src/views/pages/ScanResults/DefectCropViewer/`
-2. Create all 7 files from Sections 4.1–4.6
-3. Apply 3-line change to `ScanResults/index.tsx` (Section 4.7)
+2. Create all 8 files from Sections 4.1–4.8 (including new `CropConfigForm.tsx`)
+3. Apply wiring change to `ScanResults/index.tsx` (Section 4.7)
 4. TypeScript check: `cd fe/clustplorer && npx tsc --noEmit`
 
 ### Step 3 — Verification
@@ -1482,21 +1646,26 @@ npm start
 
 # Navigate to: http://localhost:3000/scan-results
 # Select a scan result → click "Export to VL Dataset"
-# Verify: DefectCropViewer modal opens, clusters load, bboxes render
+# Verify: ExportDatasetModal opens → create dataset → CropConfigForm opens
+# Configure params → click "Apply & View Crops" → DefectCropViewer renders with clusters
 ```
 
 ### Step 4 — End-to-End Test Checklist
 
 - [ ] Scan results table loads and selections work
-- [ ] Clicking "Export to VL Dataset" opens DefectCropViewer (not ExportDatasetModal directly)
-- [ ] Wafer map renders colored dots
-- [ ] Cluster grid shows CropTile components
-- [ ] Each tile shows canvas with image + SVG bounding boxes
-- [ ] Adjusting eps slider (debounced) refreshes clusters
-- [ ] "← Back" closes viewer, returns to table
-- [ ] "Confirm & Create Dataset" closes viewer, opens ExportDatasetModal
+- [ ] Clicking "Export to VL Dataset" opens ExportDatasetModal (UNCHANGED)
 - [ ] ExportDatasetModal works identically to before (dataset name + path → create)
-- [ ] Dataset creation succeeds, user can navigate to new dataset
+- [ ] Dataset creation succeeds → CropConfigForm opens automatically
+- [ ] CropConfigForm shows success badge with defect count
+- [ ] Form controls work: eps slider, pad slider, OClass checkboxes, recipe checkboxes
+- [ ] Clicking "Apply & View Crops" transitions to DefectCropViewer
+- [ ] API call uses form parameters (eps, pad values from form)
+- [ ] Wafer map renders colored dots
+- [ ] Cluster grid shows CropTile components with correct thumbnail size from form
+- [ ] Each tile shows canvas with image + SVG bounding boxes
+- [ ] "← Back to Form" returns to CropConfigForm with values preserved
+- [ ] Changing form values and re-applying updates the viewer
+- [ ] "← Back to Scan Results" closes everything, returns to table
 - [ ] Empty state: scan with all Pass records shows empty state message
 - [ ] Error state: invalid path shows error alert
 
@@ -1518,7 +1687,7 @@ npm start
 | **BUG10 TypeScript types** | Explicit interface definitions in `useDefectCrops.ts` |
 | **BUG11 Scroll reset** | `scrollRef` preserved and restored around re-renders |
 | **W2 No image endpoint** | New `GET /scan-results/image` endpoint added |
-| **W9 Race condition (slider)** | `useDebounced(eps, 400)` + React Query AbortController |
+| **W9 Race condition (slider)** | Form-first design eliminates live debounce — API only called on explicit "Apply & View Crops" submit |
 | **W10 CSV caching** | `@lru_cache` keyed by `(path, mtime)` |
 | **W19 Cluster explosion** | Auto-widen eps x2 up to 3 retries |
 | **W24 Path traversal** | `full.relative_to(base)` security check |

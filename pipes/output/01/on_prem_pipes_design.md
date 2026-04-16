@@ -84,7 +84,7 @@ Summarised from [pipeAnalysis.md](../pipeAnalysis.md). The 11 pipes fall into th
 - `clustplorer/logic/common/hera_utils.py` — Hera wrappers
 - `clustplorer/logic/model_training/model_training_argo_manager.py`
 - `clustplorer/logic/flywheel/flywheel_runner_argo_manager.py`
-- `subprocess.run(["kubectl", "delete", "workflow", ...])` in `vl/tasks/dataset_creation/dataset_creation_task_service.py:237`
+- `subprocess.run(["kubectl", "delete", "workflow", ...])` in `vl/tasks/dataset_creation/dataset_creation_task_service.py:237` — replaced with PG-backed `abort_task_dispatch(task_id)`
 
 ---
 
@@ -388,18 +388,34 @@ POST /api/v1/dataset/{id}/process  ---------+
 | (clustplorer)   |                          |
 +------+----------+                          |
        |                                     |
-       +-> 1. Write `tasks` row              |
-       |    (status=RUNNING, task_id=UUID)   |
+       +-> 1. BEGIN TRANSACTION                |
+       |    - Write `tasks` row              |
+       |      (status=PENDING, task_id=UUID) |
+       |    - Write `dispatch_outbox` row    |
+       |      (task_id, flow_type, queue,    |
+       |       payload, sent=false)           |
+       |    COMMIT                            |
+       |    [Transactional outbox pattern:   |
+       |     task + dispatch intent are       |
+       |     atomic — no orphan tasks if      |
+       |     broker is down]                  |
        |                                     |
-       +-> 2. Determine routing              |
-       |    needs_gpu = enrichment_config    |
-       |    size_tier = f(n_images, ...)     |
-       |                                     |
-       +-> 3. pipeline_actor.send_with_options(
+       +-> 2. Outbox relay (async):           |
+       |    SELECT FROM dispatch_outbox       |
+       |    WHERE sent=false FOR UPDATE       |
+       |    SKIP LOCKED;                      |
+       |    -> Determine routing              |
+       |       needs_gpu = enrichment_config |
+       |       size_tier = f(n_images, ...)  |
+       |    -> pipeline_actor.send_with_options(
               queue="gpu.pipeline" if gpu else "cpu.pipeline",
               priority=f(size_tier),
               args=[task_id, dataset_id, user_id, ...]
            )
+       |    -> UPDATE dispatch_outbox         |
+       |       SET sent=true                  |
+       |    -> UPDATE tasks                   |
+       |       SET status=RUNNING             |
                                              |
                                              v
                        +----------------------------------+
@@ -604,45 +620,53 @@ clustplorer/
 
 **Example — actor skeleton** (`dispatch/actors.py`, ~40 lines):
 
+> **Note:** This is a simplified skeleton for illustration. See Appendix D.1 for the
+> production-ready version which uses `subprocess.run()` for process isolation
+> (fixing the `os.environ` thread-safety bug) and `_claim_task()` for dedup.
+
 ```python
-import dramatiq
+import subprocess, sys, socket, dramatiq
 from dramatiq.brokers.rabbitmq import RabbitmqBroker
-from pipeline.controller.pipeline_flows import (
-    full_dataset_pipeline_flow,
-    enrichment_flow,
-    partial_update_flow,
-    reindex_dataset_flow,
-    restore_dataset_flow,
-    model_training_flow,
-)
+from vldbaccess.tasks.task_dao import TaskDao
 from vl.common.settings import Settings
 
 broker = RabbitmqBroker(url=Settings.RABBITMQ_URL)
 dramatiq.set_broker(broker)
 
-def _set_env(task_id, dataset_id, user_id, flow_type, **kwargs):
-    import os
-    os.environ["FLOW_RUN_ID"] = str(task_id)
-    os.environ["DATASET_ID"] = str(dataset_id)
-    os.environ["USER_ID"] = str(user_id)
-    os.environ["PIPELINE_FLOW_TYPE"] = flow_type
-    for k, v in kwargs.items():
-        os.environ[k] = str(v)
+_WORKER_ID = f"{socket.gethostname()}-{__import__('os').getpid()}"
+
+def _claim_task(task_id, worker_id):
+    """Dedup guard — returns True if this worker claimed the task."""
+    return TaskDao.try_claim(task_id, worker_id)
+
+def _run_flow(task_id, dataset_id, user_id, flow_type, **extra):
+    """Run pipeline in isolated subprocess (not os.environ — thread-safe)."""
+    env = {
+        **dict(__import__("os").environ),
+        "FLOW_RUN_ID": str(task_id), "DATASET_ID": str(dataset_id),
+        "USER_ID": str(user_id), "PIPELINE_FLOW_TYPE": flow_type,
+        **{k.upper(): str(v) for k, v in extra.items()},
+    }
+    r = subprocess.run(
+        [sys.executable, "-m", "pipeline.controller.controller",
+         "--flow-to-run", flow_type], env=env, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"Flow {flow_type} exit {r.returncode}: {r.stderr[-500:]}")
 
 @dramatiq.actor(queue_name="cpu.pipeline", max_retries=3, time_limit=4*3600*1000)
 def run_full_pipeline_cpu(task_id, dataset_id, user_id, **env):
-    _set_env(task_id, dataset_id, user_id, "PIPELINE", **env)
-    full_dataset_pipeline_flow()
+    if not _claim_task(task_id, _WORKER_ID): return
+    _run_flow(task_id, dataset_id, user_id, "PIPELINE", **env)
 
 @dramatiq.actor(queue_name="gpu.pipeline", max_retries=3, time_limit=6*3600*1000)
 def run_full_pipeline_gpu(task_id, dataset_id, user_id, **env):
-    _set_env(task_id, dataset_id, user_id, "PIPELINE", **env)
-    full_dataset_pipeline_flow()
+    if not _claim_task(task_id, _WORKER_ID): return
+    _run_flow(task_id, dataset_id, user_id, "PIPELINE", **env)
 
 @dramatiq.actor(queue_name="gpu.enrichment", max_retries=2, time_limit=4*3600*1000)
 def run_enrichment(task_id, dataset_id, user_id, **env):
-    _set_env(task_id, dataset_id, user_id, "ENRICHMENT", **env)
-    enrichment_flow()
+    if not _claim_task(task_id, _WORKER_ID): return
+    _run_flow(task_id, dataset_id, user_id, "ENRICHMENT", **env)
 
 # ... one actor per pipe, mirrors flow_map in controller.py
 ```
@@ -704,7 +728,7 @@ def trigger_pipeline(task_id, dataset_id, user_id, flow_type, enrichment_config,
 | Secret | Files in `/etc/vl/secrets/` with `0600`, or Vault |
 | ConfigMap | `/etc/vl/config.env` loaded via systemd `EnvironmentFile=` |
 | ClusterRole `pipeline-job-manager` | N/A (no API to grant on) |
-| `kubectl delete workflow` (abort) | `dramatiq_abort.abort(message_id)` |
+| `kubectl delete workflow` (abort) | PG-backed: `TaskDao.set_abort_requested(task_id, True)` — workers check at each `@controller_step` boundary |
 | Helm release | Ansible playbook or Debian/RPM packages |
 | Argo UI | RabbitMQ Management UI (port 15672) + Grafana |
 
@@ -743,7 +767,7 @@ Gate with a per-pipe feature flag (e.g., `VL_DISPATCH_BACKEND__FULL_PIPELINE=dra
 | RabbitMQ single point of failure | Med | High | Deploy 3-node cluster with mirrored queues from day one; monitor broker health |
 | NFS throughput bottleneck on large datasets | Med | Med | Benchmark before cutover; fall back to local SSD + explicit transfer step for hottest path |
 | GPU driver mismatch between host and pipeline code | Med | High | Pin CUDA/driver version; run GPU smoke test (`enrichment_flow` on small dataset) nightly |
-| `dramatiq-abort` not as immediate as `kubectl delete` | Low | Low | Accept; update UI copy to "Abort requested" until worker checks the abort flag |
+| PG-backed abort not as immediate as `kubectl delete` | Low | Low | Accept; abort latency = one `@controller_step` duration (seconds–minutes). Update UI copy to "Abort requested" until worker reaches next step checkpoint |
 | Message loss on broker crash | Low | High | Use publisher-confirms + durable queues + persistent messages; PG `tasks` row is source of truth anyway |
 | Staff unfamiliar with Dramatiq | Med | Low | Internal runbook; Dramatiq is small (~2k LOC), easy to read |
 | Double-execution due to worker crash mid-task | Low | Med | Tasks are idempotent by `FLOW_RUN_ID`; step decorator can check for already-done state |
@@ -811,7 +835,7 @@ Full revert (P4 reached and broken):
 - **Dramatiq-level retries:** per-actor `max_retries`, exponential backoff (`min_backoff`, `max_backoff`).
 - **Dead-letter queue:** after exhausted retries, message lands in `dlx.<queue>`. Daily digest to `#ops-vl`.
 - **Task-level retry:** existing `POST /api/v1/tasks/{id}/retry` — re-dispatches actor.
-- **Abort:** `dramatiq-abort` middleware -> cancels in-flight actor; commit-phase protection unchanged.
+- **Abort:** PG-backed — `TaskDao.set_abort_requested(task_id, True)`; `@controller_step` decorator checks the flag before each step and raises `TaskAbortedError`; commit-phase protection unchanged.
 - **Exit handlers:** `on_success` middleware enqueues `post_success_flow`; `on_failure` enqueues `post_error_flow`. Both idempotent.
 - **External I/O retries:** existing OpenFGA + Camtek gRPC retry decorators unchanged.
 
@@ -1083,16 +1107,25 @@ This appendix enumerates, per pipe, the **exact files to create or modify** plus
 
 | Path | Change |
 |---|---|
-| `pyproject.toml` | add `dramatiq[rabbitmq,watch] ~= 1.17`, `dramatiq-abort ~= 1.2` |
-| `vl/common/settings.py` | add `RABBITMQ_URL`, `DISPATCH_BACKEND`, `ABORT_BACKEND_URL` settings |
+| `pyproject.toml` | add `dramatiq[rabbitmq,watch] ~= 1.17` (no `dramatiq-abort` — abort is PG-backed, see abort.py) |
+| `vl/common/settings.py` | add `RABBITMQ_URL`, `DISPATCH_BACKEND` settings (no `ABORT_BACKEND_URL` — abort is PG-backed) |
 
 **`clustplorer/logic/dispatch/broker.py`:**
+
+> **BUG-FIX (Redis dependency):** The original version used `dramatiq_abort`'s
+> `RedisBackend`, which introduces an **undocumented Redis dependency** — contradicting
+> the architecture's "Why RabbitMQ over Redis" decision. Redis was also missing from
+> the Component Inventory (§4.1), VM specs, monitoring, and backup plans.
+>
+> **Fix:** Replace with a PostgreSQL-backed abort mechanism. The `tasks` table already
+> tracks state; workers check an `abort_requested` flag at each `@controller_step`
+> boundary. This removes the Redis dependency entirely and keeps PG as the single
+> source of truth.
 
 ```python
 """Single broker instance used by all actors and the dispatcher."""
 from dramatiq.brokers.rabbitmq import RabbitmqBroker
 from dramatiq import set_broker
-from dramatiq_abort import Abortable, backends
 
 from vl.common.settings import Settings
 from clustplorer.logic.dispatch.middleware import ExitHandlerMiddleware
@@ -1103,14 +1136,28 @@ def get_broker() -> RabbitmqBroker:
     global _broker
     if _broker is None:
         _broker = RabbitmqBroker(url=Settings.RABBITMQ_URL)
-        abort_backend = backends.RedisBackend(url=Settings.ABORT_BACKEND_URL)
-        _broker.add_middleware(Abortable(backend=abort_backend))
+        # Abort is handled via PG tasks.abort_requested flag (see abort.py),
+        # not via dramatiq-abort + Redis. This avoids an undocumented Redis
+        # dependency and keeps PostgreSQL as the single source of truth.
         _broker.add_middleware(ExitHandlerMiddleware())
         set_broker(_broker)
     return _broker
 ```
 
 **`clustplorer/logic/dispatch/middleware.py`:**
+
+> **BUG-FIX (infinite loop):** The original middleware fired `after_process_message`
+> for **every** actor — including `run_post_success` and `run_post_error` themselves.
+> When `post_success_flow` completed, the middleware would enqueue another
+> `run_post_success`, creating an infinite loop.
+>
+> **BUG-FIX (stale env vars):** The original `run_post_success`/`run_post_error`
+> actors read `os.environ.get("DATASET_ID")` from the **worker process** that
+> happens to execute the exit handler — not the worker that ran the original task.
+> This returns a stale value from whatever task last ran on that worker.
+>
+> **Fix:** (1) Skip exit-handler actors by name. (2) Extract `dataset_id` from the
+> original message args and pass it explicitly.
 
 ```python
 """Dramatiq middleware replacing Argo onExit handlers."""
@@ -1121,10 +1168,17 @@ from vl.common.logging_init import get_vl_logger
 
 logger = get_vl_logger(__name__)
 
+# Actors that must NOT trigger exit handlers (prevents infinite loop)
+_EXIT_HANDLER_ACTORS = frozenset({"run_post_success", "run_post_error"})
+
 class ExitHandlerMiddleware(Middleware):
     """Maps to Argo's onExit template: dispatches post_success/post_error actors."""
 
     def after_process_message(self, broker, message, *, result=None, exception=None):
+        # --- FIX: prevent infinite loop ---
+        if message.actor_name in _EXIT_HANDLER_ACTORS:
+            return
+
         # Lazy import to avoid circular dep with actors module
         from clustplorer.logic.dispatch.actors import run_post_success, run_post_error
 
@@ -1132,11 +1186,14 @@ class ExitHandlerMiddleware(Middleware):
         if not task_id:
             return
 
+        # --- FIX: extract dataset_id from original message args, not os.environ ---
+        dataset_id = message.args[1] if len(message.args) > 1 else ""
+
         if exception is None:
-            run_post_success.send(str(task_id))
+            run_post_success.send(str(task_id), str(dataset_id))
             logger.info(f"Enqueued post_success for task {task_id}")
         else:
-            run_post_error.send(str(task_id), str(exception))
+            run_post_error.send(str(task_id), str(dataset_id), str(exception))
             logger.error(f"Enqueued post_error for task {task_id}: {exception}")
 ```
 
@@ -1167,13 +1224,33 @@ def needs_gpu(enrichment_config: dict[str, Any] | None) -> bool:
 
 **`clustplorer/logic/dispatch/abort.py`:**
 
-```python
-"""Replacement for subprocess kubectl delete workflow."""
-from dramatiq_abort import abort
+> **BUG-FIX:** Original used `dramatiq_abort` backed by Redis. Replaced with a
+> PG-backed abort that sets a flag on the `tasks` row. Workers check this flag
+> at each `@controller_step` boundary and raise `TaskAbortedError` to exit cleanly.
 
-def abort_task_dispatch(message_id: str) -> None:
-    """Request cancellation of an in-flight Dramatiq message."""
-    abort(message_id)
+```python
+"""Replacement for subprocess kubectl delete workflow.
+
+Uses PostgreSQL tasks.abort_requested column instead of dramatiq-abort + Redis.
+Workers poll this flag at each @controller_step boundary via the existing
+task-state decorator, so abort latency equals one step duration (seconds to
+minutes, depending on the pipe).
+"""
+from vldbaccess.tasks.task_dao import TaskDao
+from vl.common.logging_init import get_vl_logger
+
+logger = get_vl_logger(__name__)
+
+def abort_task_dispatch(task_id: str) -> None:
+    """Request cancellation of an in-flight task via PG flag.
+
+    The worker's @controller_step decorator checks `abort_requested` before
+    each step and raises TaskAbortedError, which Dramatiq treats as a
+    permanent failure (no retry). The on_failure middleware then fires
+    post_error_flow as expected.
+    """
+    TaskDao.set_abort_requested(task_id, True)
+    logger.info(f"Set abort_requested=True for task {task_id}")
 ```
 
 **`clustplorer/logic/dispatch/__init__.py`:**
@@ -1217,20 +1294,67 @@ def trigger_pipeline(
 
 **Actor code (append to `actors.py`):**
 
+> **BUG-FIX (thread safety):** The original `_set_env` wrote to `os.environ`, which
+> is a **process-global dict** — not thread-safe. With `--threads 1` this is masked,
+> but if threads are ever increased for throughput, tasks silently corrupt each
+> other's context. Even with threads=1, the exit-handler middleware dispatches
+> messages that may land on the same worker, overwriting in-flight env vars.
+>
+> **Fix:** Replace `_set_env` + direct flow call with `subprocess.run()`. This gives
+> each task its own process and env — true isolation, matching what K8s pods provided.
+> The `pipeline/controller/` CLI entrypoint is preserved unmodified.
+>
+> **BUG-FIX (dedup):** Added a `_claim_task` guard at actor entry. If the API
+> publishes a duplicate message (network blip before broker ack), the second worker
+> sees the task already claimed and exits without double-execution.
+
 ```python
-import os
+import subprocess
+import sys
 import dramatiq
 
-from pipeline.controller.pipeline_flows import full_dataset_pipeline_flow
-from vl.common.settings import Settings
+from vldbaccess.tasks.task_dao import TaskDao
+from vl.common.logging_init import get_vl_logger
 
-def _set_env(task_id, dataset_id, user_id, flow_type, **kwargs):
-    os.environ["FLOW_RUN_ID"] = str(task_id)
-    os.environ["DATASET_ID"] = str(dataset_id)
-    os.environ["USER_ID"] = str(user_id)
-    os.environ["PIPELINE_FLOW_TYPE"] = flow_type
-    for k, v in kwargs.items():
-        os.environ[k.upper()] = str(v)
+logger = get_vl_logger(__name__)
+
+def _claim_task(task_id: str, worker_id: str) -> bool:
+    """Dedup guard: returns True if this worker successfully claimed the task.
+
+    Prevents double-execution when a duplicate message is published (e.g.,
+    API retries after a broker-ack network blip).
+    """
+    return TaskDao.try_claim(task_id, worker_id)
+
+def _run_flow_in_subprocess(task_id, dataset_id, user_id, flow_type, **extra_env):
+    """Invoke the pipeline CLI in an isolated subprocess.
+
+    Each task gets its own process with its own os.environ — true isolation
+    matching what K8s pods provided. No thread-safety concerns.
+    """
+    env = {
+        **dict(__import__("os").environ),  # inherit base env
+        "FLOW_RUN_ID": str(task_id),
+        "DATASET_ID": str(dataset_id),
+        "USER_ID": str(user_id),
+        "PIPELINE_FLOW_TYPE": flow_type,
+        **{k.upper(): str(v) for k, v in extra_env.items()},
+    }
+    result = subprocess.run(
+        [sys.executable, "-m", "pipeline.controller.controller",
+         "--flow-to-run", flow_type],
+        env=env,
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        logger.error(f"Flow {flow_type} failed for task {task_id}: {result.stderr}")
+        raise RuntimeError(
+            f"Flow {flow_type} exited with code {result.returncode}: "
+            f"{result.stderr[-500:]}"
+        )
+
+import socket
+_WORKER_ID = f"{socket.gethostname()}-{__import__('os').getpid()}"
 
 @dramatiq.actor(
     queue_name="cpu.pipeline",
@@ -1238,8 +1362,10 @@ def _set_env(task_id, dataset_id, user_id, flow_type, **kwargs):
     time_limit=4 * 3600 * 1000,
 )
 def run_full_pipeline_cpu(task_id, dataset_id, user_id, **env):
-    _set_env(task_id, dataset_id, user_id, "PIPELINE", **env)
-    full_dataset_pipeline_flow()
+    if not _claim_task(task_id, _WORKER_ID):
+        logger.warning(f"Task {task_id} already claimed — skipping duplicate")
+        return
+    _run_flow_in_subprocess(task_id, dataset_id, user_id, "PIPELINE", **env)
 
 @dramatiq.actor(
     queue_name="gpu.pipeline",
@@ -1247,8 +1373,10 @@ def run_full_pipeline_cpu(task_id, dataset_id, user_id, **env):
     time_limit=6 * 3600 * 1000,
 )
 def run_full_pipeline_gpu(task_id, dataset_id, user_id, **env):
-    _set_env(task_id, dataset_id, user_id, "PIPELINE", **env)
-    full_dataset_pipeline_flow()
+    if not _claim_task(task_id, _WORKER_ID):
+        logger.warning(f"Task {task_id} already claimed — skipping duplicate")
+        return
+    _run_flow_in_subprocess(task_id, dataset_id, user_id, "PIPELINE", **env)
 ```
 
 **API wiring update** in `api_dataset_create_workflow.py`:
@@ -1268,7 +1396,8 @@ message_id = trigger_pipeline(
     enrichment_config=enrichment_config,
     size_units=size_units,
 )
-# Persist message_id into tasks.metadata_ (replaces metadata_.workflow_name)
+# message_id is the RabbitMQ message ID (useful for tracing/debugging).
+# Abort no longer needs it — abort is PG-backed via task_id directly.
 await repo.update_task_metadata(task_id, {"message_id": message_id})
 ```
 
@@ -1441,21 +1570,30 @@ def run_nop(task_id="smoke-test", dataset_id="n/a", user_id="n/a"):
 
 These are triggered **by middleware**, not by the dispatcher. Defined once in `actors.py`, invoked by `ExitHandlerMiddleware` (see D.0).
 
+> **BUG-FIX (stale env vars):** The original actors read
+> `os.environ.get("DATASET_ID", "")` from the **worker process** that happens to
+> execute the exit handler — not the worker that ran the original task. Since exit
+> handlers are dispatched as separate messages to the `cpu.default` queue, they land
+> on whichever worker is free. The `DATASET_ID` in that worker's `os.environ` is
+> from whatever task last ran there — a completely unrelated value.
+>
+> **Fix:** `dataset_id` is now passed explicitly by the `ExitHandlerMiddleware`
+> (extracted from the original message's `args[1]`). The actors also use
+> `_run_flow_in_subprocess` for process isolation, consistent with all other actors.
+
 **Actors:**
 
 ```python
-from pipeline.controller.pipeline_flows import post_success_flow, post_error_flow
+@dramatiq.actor(queue_name="cpu.default", max_retries=1, time_limit=600_000)
+def run_post_success(task_id, dataset_id):
+    _run_flow_in_subprocess(task_id, dataset_id, "", "PIPELINE")
 
 @dramatiq.actor(queue_name="cpu.default", max_retries=1, time_limit=600_000)
-def run_post_success(task_id):
-    _set_env(task_id, os.environ.get("DATASET_ID", ""), "", "PIPELINE")
-    post_success_flow()
-
-@dramatiq.actor(queue_name="cpu.default", max_retries=1, time_limit=600_000)
-def run_post_error(task_id, error_message):
-    os.environ["ERROR_MESSAGE"] = error_message
-    _set_env(task_id, os.environ.get("DATASET_ID", ""), "", "PIPELINE")
-    post_error_flow()
+def run_post_error(task_id, dataset_id, error_message):
+    _run_flow_in_subprocess(
+        task_id, dataset_id, "", "PIPELINE",
+        error_message=error_message,
+    )
 ```
 
 ### D.11 — `model_training_flow`
@@ -1534,6 +1672,10 @@ def select_actor(flow_type: str, gpu: bool):
 
 **File to UPDATE:** `vl/tasks/dataset_creation/dataset_creation_task_service.py`
 
+> **BUG-FIX:** Updated to use PG-backed abort via `task_id` (not `message_id` +
+> Redis). This aligns with the fixed `abort.py` which sets `tasks.abort_requested`
+> in PostgreSQL. Workers check this flag at each `@controller_step` boundary.
+
 ```python
 # Before (lines ~237-261):
 # def _terminate_argo_workflow(workflow_name: str) -> None:
@@ -1543,15 +1685,15 @@ def select_actor(flow_type: str, gpu: bool):
 from clustplorer.logic.dispatch import abort_task_dispatch
 
 @staticmethod
-def _terminate_dispatched_task(message_id: str) -> None:
+def _terminate_dispatched_task(task_id: str) -> None:
     try:
-        abort_task_dispatch(message_id)
-        logger.info(f"Requested abort of dispatched message {message_id}")
+        abort_task_dispatch(task_id)
+        logger.info(f"Requested abort of task {task_id}")
     except Exception as e:
-        raise TaskWorkflowTerminationError(f"Failed to abort {message_id}: {e}")
+        raise TaskWorkflowTerminationError(f"Failed to abort task {task_id}: {e}")
 ```
 
-Update the call-site in `abort_task` to read `metadata_.message_id` instead of `metadata_.workflow_name`.
+Update the call-site in `abort_task` to pass `task_id` directly (no longer needs `metadata_.workflow_name` or `metadata_.message_id`).
 
 ### D.15 — File-change summary table
 

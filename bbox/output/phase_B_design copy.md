@@ -1,6 +1,6 @@
 # Phase B – Solution Design
 
-> **Feature:** Defect Crop Viewer — post-export review stage opened after dataset creation
+> **Feature:** Defect Crop Viewer — post-export review stage with configuration form shown after dataset creation
 
 ---
 
@@ -11,9 +11,10 @@ Given a scan export folder containing:
 - `images/` — one JPEG per defect row (close-up of the defect location)
 
 **Goal:** Present a post-export review UI that:
-1. Groups spatially nearby defects into clusters
-2. Renders each cluster as a tile showing **multiple defects and bounding boxes together**
-3. Opens automatically after dataset creation so the user can review the exported defects
+1. Opens automatically after dataset creation
+2. Presents a configuration form (clustering parameters, filtering options) before rendering
+3. Groups spatially nearby defects into clusters based on form settings
+4. Renders each cluster as a tile showing **multiple defects and bounding boxes together**
 
 **Key insight discovered in analysis:** `XInFrame=YInFrame=0` for all rows in the real data. Each image is a close-up of a single defect. Therefore, "multiple bounding boxes per crop" means **showing multiple nearby defect images together in one cluster panel**, not multiple boxes within a single image.
 
@@ -227,6 +228,15 @@ React Client                        FastAPI Backend
 │  (UNCHANGED)        │             │                                  │
 │         │           │             │                                  │
 │  Dataset created ✓  │             │                                  │
+│         │           │             │                                  │
+│         ▼           │             │                                  │
+│  CropConfigForm     │             │                                  │
+│  ─────────────────  │             │                                  │
+│  eps slider (μm)    │             │                                  │
+│  pad slider (px)    │             │                                  │
+│  OClass filter      │             │                                  │
+│  Recipe filter      │             │                                  │
+│  [Apply & View] btn │             │                                  │
 │         │           │  GET        │  GET /defect-clusters            │
 │         ▼           ──────────────▶  1. parse_db_csv()               │
 │  DefectCropViewer   │             │  2. filter_defects()             │
@@ -387,15 +397,42 @@ For centered fallback (XInFrame=YInFrame=0):
 
 ### Screen Layout
 
+**Step 1 — Configuration Form (shown immediately after dataset creation):**
+
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  [←] Back to Scans    Review Defect Crops — MTK-AHJ11236   [? Help] │
+│  [←] Back to Scans    Configure Crop Review — MTK-AHJ11236 [? Help] │
 │─────────────────────────────────────────────────────────────────────│
-│  ✓ Dataset created    180 defects  │  24 clusters  │  avg 7.5/cluster│
+│  ✓ Dataset created successfully    180 defects exported              │
 │─────────────────────────────────────────────────────────────────────│
-│  Clustering Controls:                                                │
+│                                                                      │
+│  Clustering Parameters:                                              │
+│  ────────────────────                                                │
 │  Cluster Radius:  [──●──────────────] 300μm                         │
 │  Crop Padding:    [────●────────────] 64px                          │
+│                                                                      │
+│  Filters:                                                            │
+│  ────────                                                            │
+│  OClass:  [☑ All] ☑ Missing Bump  ☑ Foreign Particle  ☑ Scratch    │
+│  Recipe:  [☑ All] ☑ Recipe_A  ☑ Recipe_B  ☑ Recipe_C               │
+│                                                                      │
+│  Display:                                                            │
+│  ────────                                                            │
+│  Max images per cluster:  [──●──────] 16                            │
+│  Thumbnail size:          [────●────] 256px                         │
+│                                                                      │
+│                     [Apply & View Crops]                             │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Step 2 — Crop Viewer (shown after user submits the form):**
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  [←] Back to Form     Review Defect Crops — MTK-AHJ11236   [? Help] │
+│─────────────────────────────────────────────────────────────────────│
+│  ✓ Dataset created    180 defects  │  24 clusters  │  avg 7.5/cluster│
 │─────────────────────────────────────────────────────────────────────│
 │  WAFER MAP                   │  CLUSTER GRID                         │
 │  ┌───────────────────────┐   │  ┌─────────────┐  ┌─────────────┐   │
@@ -410,31 +447,45 @@ For centered fallback (XInFrame=YInFrame=0):
 │                              │  │ 3 defects   │                     │
 │                              │  └─────────────┘                     │
 │─────────────────────────────────────────────────────────────────────│
-│                        [← Back to Scan Results]                     │
+│          [← Back to Form]          [← Back to Scan Results]         │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Tree
 
 ```
-DefectCropViewer (new: fe/.../ScanResults/DefectCropViewer/)
-├── CropViewerHeader
-│   ├── Back to Scans button
-│   ├── Title (scan name)
-│   └── Stats bar (dataset created badge + Statistic components)
-├── ClusteringControls
-│   ├── eps Slider (Ant Design Slider, debounced)
-│   └── pad Slider
-├── WaferMap
-│   └── <canvas> (all defect dots, colored by OClass, auto-fit viewport)
-└── ClusterGrid
-    └── CropTile (per cluster) [reused/extended]
-        ├── ClusterPanel (N images side by side)
-        │   └── SingleImageTile (per defect in cluster)
-        │       ├── <canvas> drawImage(srcRect → tile)
-        │       └── BoundingBoxOverlay (SVG)
-        │           └── <rect> + <text> per defect
-        └── ClusterBadge (defect count, OClass breakdown)
+DefectCropPage (new: fe/.../ScanResults/DefectCropPage/)
+├── CropConfigForm (Step 1 — shown first after dataset creation)
+│   ├── FormHeader
+│   │   ├── Back to Scans button
+│   │   ├── Title (scan name)
+│   │   └── Success badge ("Dataset created — 180 defects")
+│   ├── ClusteringParams (Ant Design Form section)
+│   │   ├── eps Slider (range 50–2000μm, default 300)
+│   │   └── pad Slider (range 16–256px, default 64)
+│   ├── FilterParams (Ant Design Form section)
+│   │   ├── OClass Checkbox Group (select/deselect defect classes)
+│   │   └── Recipe Checkbox Group (select/deselect recipes)
+│   ├── DisplayParams (Ant Design Form section)
+│   │   ├── maxPerCluster Slider (4–32, default 16)
+│   │   └── thumbnailSize Slider (128–512px, default 256)
+│   └── [Apply & View Crops] button → transitions to Step 2
+│
+└── DefectCropViewer (Step 2 — shown after form submission)
+    ├── CropViewerHeader
+    │   ├── Back to Form button (returns to CropConfigForm with preserved values)
+    │   ├── Title (scan name)
+    │   └── Stats bar (defect count, cluster count, avg per cluster)
+    ├── WaferMap
+    │   └── <canvas> (all defect dots, colored by OClass, auto-fit viewport)
+    └── ClusterGrid
+        └── CropTile (per cluster) [reused/extended]
+            ├── ClusterPanel (N images side by side)
+            │   └── SingleImageTile (per defect in cluster)
+            │       ├── <canvas> drawImage(srcRect → tile)
+            │       └── BoundingBoxOverlay (SVG)
+            │           └── <rect> + <text> per defect
+            └── ClusterBadge (defect count, OClass breakdown)
 ```
 
 ### Visual Design Specifications
@@ -466,25 +517,35 @@ DefectCropViewer (new: fe/.../ScanResults/DefectCropViewer/)
 - Auto-fit: `scale = min(300/range_x, 300/range_y) * 0.9` (10% margin)
 - Hover tooltip: cluster ID + defect count
 
-**ClusteringControls:**
+**CropConfigForm:**
 - Eps slider: range 50–2000μm, step 50, default 300
 - Pad slider: range 16–256px, step 8, default 64
-- Both debounced 400ms before triggering API refetch
-- Show unit labels (μm, px)
+- OClass checkbox group: all selected by default, maps to defect class categories
+- Recipe checkbox group: all selected by default, populated from DB.csv distinct recipes
+- Max images per cluster slider: range 4–32, step 4, default 16
+- Thumbnail size slider: range 128–512px, step 64, default 256
+- No debounced API calls — form values stored locally, API called only on "Apply & View Crops" submit
+- Show unit labels (μm, px) on sliders
 
 ### Interaction Design
 
 ```
-User Action               System Response
-──────────────────────────────────────────────────────────────
-Hover CropTile            → highlight corresponding cluster on WaferMap
-Click WaferMap cluster    → scroll CropGrid to that cluster
-Change eps slider         → debounced 400ms → refetch → grid updates (preserve scroll)
-Click [← Back to Scans]  → close DefectCropViewer → return to scan results table
-Click single defect tile  → full-screen image preview (Ant Design Modal)
+User Action                     System Response
+──────────────────────────────────────────────────────────────────────
+FORM STEP (CropConfigForm):
+Adjust eps/pad sliders          → values stored in local form state (no API call yet)
+Toggle OClass/Recipe checkboxes → values stored in local form state
+Click [Apply & View Crops]      → GET /defect-clusters with form params → transition to viewer
+
+VIEWER STEP (DefectCropViewer):
+Hover CropTile                  → highlight corresponding cluster on WaferMap
+Click WaferMap cluster          → scroll CropGrid to that cluster
+Click single defect tile        → full-screen image preview (Ant Design Modal)
+Click [← Back to Form]         → return to CropConfigForm (form values preserved)
+Click [← Back to Scan Results] → close entire page → return to scan results table
 ```
 
-### Trigger: When Does DefectCropViewer Open?
+### Trigger: When Does the Form & Viewer Open?
 
 ```
 User Flow:
@@ -493,9 +554,13 @@ User Flow:
 3. ExportDatasetModal opens (UNCHANGED existing flow)
 4. User configures export and clicks "Create Dataset"
 5. Dataset is created successfully
-6. On success callback → DefectCropViewer opens automatically
-7. User reviews clustered defect crops
-8. User clicks "← Back to Scans" to return
+6. On success callback → CropConfigForm opens automatically
+7. User configures clustering params, filters, and display options
+8. User clicks "Apply & View Crops"
+9. GET /defect-clusters is called with form parameters
+10. DefectCropViewer renders with clustered results
+11. User can click "← Back to Form" to adjust settings and re-render
+12. User clicks "← Back to Scan Results" to return
 ```
 
 ---
@@ -504,11 +569,15 @@ User Flow:
 
 > **Q: Does the crop viewer affect the dataset export?**
 
-**Answer: No.** The crop viewer is a **post-export review tool**. The dataset is already created by the time the crop viewer opens. The existing export flow (`ExportDatasetModal` → `POST /export-dataset`) remains completely unchanged. The crop viewer simply provides a visual review of the defects that were included in the dataset.
+**Answer: No.** The crop viewer is a **post-export review tool**. The dataset is already created by the time the form and viewer open. The existing export flow (`ExportDatasetModal` → `POST /export-dataset`) remains completely unchanged. The form + viewer simply provides a configurable visual review of the defects that were included in the dataset.
 
-> **Q: When does the crop viewer open?**
+> **Q: When does the form open?**
 
-**Answer:** Immediately after the dataset is successfully created. The `ExportDatasetModal`'s success callback triggers the `DefectCropViewer` to open, passing the scan path and dataset metadata as props.
+**Answer:** Immediately after the dataset is successfully created. The `ExportDatasetModal`'s success callback triggers `CropConfigForm` to open, passing the scan path and dataset metadata as props. The user configures clustering/filter/display parameters in the form, then clicks "Apply & View Crops" to trigger the API call and render the `DefectCropViewer`.
+
+> **Q: Why show a form before the viewer instead of rendering immediately?**
+
+**Answer:** Showing the configuration form first gives the user control over clustering parameters and filters **before** the potentially expensive `/defect-clusters` API call is made. This avoids wasted computation with default parameters the user doesn't want. The user can also navigate back from the viewer to the form to adjust settings and re-render without re-creating the dataset.
 
 **Future v2 option (out of scope):** If the use case requires exporting only the cropped patches (as ML training tiles), a new `include_crops=true` parameter can be added to `POST /export-dataset`, which would instruct the backend to apply PIL crops before writing to the export folder. This doubles the implementation scope and is deferred.
 
@@ -525,6 +594,6 @@ User Flow:
 | **Eps unit** | Microns (μm), default 300, user-adjustable 50–2000 |
 | **Multiple bboxes strategy** | Spatial clustering → cluster panel with N images side-by-side |
 | **Image serving** | New `GET /scan-results/image` endpoint (path-validated, CORS-enabled) |
-| **State management** | React Query (server data) + local useState (slider values, modal open) |
-| **UI integration** | Existing export flow unchanged → dataset created → DefectCropViewer opens on success |
+| **State management** | React Query (server data) + local useState (form values, step navigation) |
+| **UI integration** | Existing export flow unchanged → dataset created → CropConfigForm opens → user submits → DefectCropViewer renders |
 | **Backward compatibility** | Zero changes to existing export flow, API, or ExportDatasetModal |

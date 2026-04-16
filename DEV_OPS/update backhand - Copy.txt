@@ -5,15 +5,13 @@ Prompt to Claude:
 Run the following commands exactly in order, one after the other.
 Stop if any command fails and show me the failing command + error output.
 
-1) Create backend package
-vl-admin dev pack --be --cpu --skip-gpu
 
-2) Uninstall
+#Uninstall
 helm uninstall visual-layer
 helm uninstall keycloak -n keycloak
 helm uninstall openfga -n openfga
 
-3) Delete PVCs and volumes
+#Delete PVCs and volumes
 # first get all PVCs
 kubectl get pvc -A
 # then delete all PVCs in all namespaces
@@ -24,7 +22,12 @@ kubectl get pv
 # then delete all volumes (PVs)
 kubectl delete pv --all
 
-4) Install
+
+
+# delete all remains pods
+kubectl delete pods -all -A
+
+# Install
 helm upgrade -i visual-layer devops/visual-layer \
   -f devops/env/k3s/values.yaml \
   -f devops/clients/camtek/values.yaml \
@@ -33,8 +36,11 @@ helm upgrade -i visual-layer devops/visual-layer \
 vl-admin install keycloak
 vl-admin install openfga
 
-5) Verify pods are running
+# Verify pods are running
 kubectl get pods
 kubectl get pods -n keycloak
 kubectl get pods -n openfga
+
+# update launch
+update launch.json , use the developer guid
 

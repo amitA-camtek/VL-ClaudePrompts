@@ -6,4 +6,6 @@ features:
 oidc:
   enabled: false
 dataServer:
-  grpcEndpoint: "10.5.1.126:5050"
+  grpcEndpoint: "10.5.0.96:5050"
+  host: "10.5.0.96"          # real IP — used for pod hostAliases
+  hostname: "10.5.0.96"  # must match the hostname in grpcEndpoint
