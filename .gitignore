@@ -1,3 +1,5 @@
 *.jpeg
-\scan\Scane Resault after\
-\scan\Scane Resault before\
+~$*
+scan/scan-result-after/
+scan/scan-result-before/
+scan/b2de9dd1-1c90-4ce9-8414-2b3f5d3431ba/

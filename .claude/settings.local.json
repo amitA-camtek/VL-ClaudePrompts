@@ -15,9 +15,9 @@
       "Bash(ls /c/Users/amita/AppData/Local/Programs/Python/Python3*/python.exe)",
       "Bash(cmd.exe /c \"where python\")",
       "Bash(unzip -l \"C:/Users/amita/Desktop/detaction AI/scripts/VL/AI_VL.pptx\")",
-      "Bash(awk -F',' 'NR>1 {print $12}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/Scane Resault after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")",
-      "Bash(awk -F',' 'NR>1 {print $6}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/Scane Resault after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")",
-      "Bash(awk -F',' 'NR>1 {print $18}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/Scane Resault after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")"
+      "Bash(awk -F',' 'NR>1 {print $12}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/scan-result-after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")",
+      "Bash(awk -F',' 'NR>1 {print $6}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/scan-result-after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")",
+      "Bash(awk -F',' 'NR>1 {print $18}' \"C:/Users/amita/Desktop/detaction AI/scripts/scan/scan-result-after/MTK-AHJ11236_setup1_20260406_201352/DB.csv\")"
     ]
   }
 }

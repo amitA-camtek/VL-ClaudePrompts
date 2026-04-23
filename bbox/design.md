@@ -15,7 +15,7 @@ Create an **intermediate stage** between:
 
 ### This stage must:
 
-* Display images from the `scanResult` use the information from C:\Users\amita\Desktop\detaction AI\scripts\scan\scanResault.md and "C:\Users\amita\Desktop\detaction AI\scripts\scan\ScanResualt after"
+* Display images from the `scanResult` use the information from C:\Users\amita\Desktop\detaction AI\scripts\scan\scanResult.md and "C:\Users\amita\Desktop\detaction AI\scripts\scan\scan-result-after"
 * Perform **image cropping (client-side or server-side – you decide)**
 * Load defect data from `db.csv` include in the
 * Each record in `db.csv` contains **relative coordinates (x, y)** of defects

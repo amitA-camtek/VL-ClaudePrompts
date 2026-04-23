@@ -1,0 +1,97 @@
+add to the application a demo form that is oped from the left tolbar (same as side by side demo).
+
+General Requirements:
+- Use React functional components with hooks.
+- Use the style of the system..
+- Keep everything in a single page for demo purposes.
+- No external drawing libraries (no fabric.js, no konva).
+- Use clean, modular components.
+
+-------------------------------------
+LAYOUT OVERVIEW
+-------------------------------------
+
+The screen is divided into 2 main sections:
+
+1. LEFT SIDE (Main Workspace)
+2. RIGHT SIDE (Preview + Placeholder Panels)
+
+-------------------------------------
+1. LEFT
+-------------------------------------
+
+show the full frame in a collections (defect, good, unknown) like in the level propegation
+
+-------------------------------------
+4. RIGHT PANEL (STACKED)
+-------------------------------------
+
+TOP-RIGHT — Die Edit Component
+- Placeholder panel
+- Title: "Die View"
+- Show a grid (like a 4x4 matrix)
+- Highlight one cell
+- Add a label: "Die Edit"
+
+BOTTOM-RIGHT — Wafer Map Component
+- Placeholder panel
+- Title: "Wafer Map"
+- Show a colored grid:
+  - Green = good
+  - Yellow = warning
+  - Blue = selected
+- Static demo only
+
+-------------------------------------
+INTERACTION DETAILS
+-------------------------------------
+
+-------------------------------------
+STYLING
+-------------------------------------
+
+- Dark UI:
+  - use the syle of the application
+
+-------------------------------------
+DELIVERABLE
+-------------------------------------
+
+- Provide full React code (single file is fine).
+- Include all components in one file for demo:
+  - App
+  - SideBySideViewer
+  - BoundingBoxLayer
+  - Filmstrip
+  - DefectsTable
+  - DieViewPlaceholder
+  - WaferMapPlaceholder
+- Include basic CSS (inline or styles object is fine).
+- Use sample image URLs.
+
+-------------------------------------
+BONUS (if possible)
+-------------------------------------
+
+- Smooth drawing UX (no flicker)
+```
+Show less
+Agent:Explore codebase structure
+IN
+Explore the vl_camtek repository at /home/ubuntu/vl_camtek. I need to understand:
+
+1. The overall project structure (is this a React app? What framework?)
+2. The left toolbar component - where is it? How does it work?
+3. The "SideBySideComponent" or "SideBySide demo" - where is it defined? How is it registered? How is it opened from the left toolbar?
+4. The styling system used (CSS modules? styled-components? Tailwind? Plain CSS? Theme?)
+5. How routing/navigation works between demos
+6. Where new demo components should be added
+
+I need to add a new demo (a "FullFrameSelection" ) that opens from the left toolbar the same way the SideBySide demo does. So I need to know the exact pattern to follow.
+
+Report back with:
+- File paths for the toolbar, sidebyside demo registration, and key style files
+- The exact pattern (boilerplate) used to register a demo so I can replicate it
+- What CSS/style variables exist (dark theme colors, accent colors)
+- Any existing image assets used for demos
+

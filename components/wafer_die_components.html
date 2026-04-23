@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wafer & Die Components — Detection AI</title>
+<style>
+/* ── Reset & Base ─────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',-apple-system,sans-serif;background:#080e1a;color:#c8d6e5;line-height:1.5;padding:24px;min-height:100vh}
+::selection{background:#00d4aa33;color:#fff}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#0a1628}
+::-webkit-scrollbar-thumb{background:#1e3a5f;border-radius:3px}
+
+/* ── Page Header ──────────────────────────────────── */
+.page-header{text-align:center;padding:32px 0 16px;border-bottom:1px solid #1e3a5f;margin-bottom:32px}
+.page-header h1{font-size:28px;font-weight:600;color:#e8f0fe;letter-spacing:1px}
+.page-header p{color:#5a7a9a;font-size:14px;margin-top:6px}
+
+/* ── Section ──────────────────────────────────────── */
+.section{margin-bottom:48px}
+.section-title{font-size:13px;font-weight:700;letter-spacing:3px;color:#00d4aa;margin-bottom:24px;padding-left:4px;display:flex;align-items:center;gap:12px}
+.section-title::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#00d4aa44,transparent)}
+
+/* ── Component Card ───────────────────────────────── */
+.component-card{background:#0d1a2d;border:1px solid #1a2e4a;border-radius:12px;margin-bottom:28px;overflow:hidden;transition:border-color .2s}
+.component-card:hover{border-color:#1e4a6a}
+.card-header{padding:16px 20px;border-bottom:1px solid #1a2e4a;display:flex;align-items:center;gap:12px}
+.option-badge{background:#00d4aa;color:#080e1a;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:3px 10px;border-radius:4px;white-space:nowrap}
+.card-header h3{font-size:16px;font-weight:600;color:#e0eaf4}
+.card-header .desc{color:#5a7a9a;font-size:12px;margin-left:auto}
+.card-body{padding:20px}
+
+/* ── Wafer Tabs ───────────────────────────────────── */
+.wafer-tabs{display:flex;gap:8px;margin-bottom:16px}
+.wafer-tab{background:#111e33;border:1px solid #1e3a5f;color:#7a9ab5;padding:6px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:all .2s}
+.wafer-tab:hover{border-color:#2a5a8f}
+.wafer-tab.active{background:#00d4aa18;border-color:#00d4aa;color:#00d4aa}
+
+/* ── Wafer Map (Option A) ─────────────────────────── */
+.wafer-map-wrap{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.wafer-canvas-box{position:relative}
+.wafer-canvas-box canvas{display:block;border-radius:8px}
+.map-tooltip{position:absolute;pointer-events:none;background:#0d1a2dee;border:1px solid #1e3a5f;border-radius:6px;padding:8px 12px;font-size:12px;color:#c8d6e5;white-space:nowrap;opacity:0;transition:opacity .15s;z-index:10}
+.map-tooltip.visible{opacity:1}
+.map-legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:#5a7a9a}
+.legend-bar{width:140px;height:10px;border-radius:5px;background:linear-gradient(90deg,#1a2a3a,#1b5e4f,#2d8f5f,#f0ad4e,#e74c3c)}
+.map-stats{background:#0a1425;border:1px solid #152540;border-radius:8px;padding:16px;min-width:200px}
+.map-stats .stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #152540;font-size:13px}
+.map-stats .stat-row:last-child{border-bottom:none}
+.map-stats .stat-label{color:#5a7a9a}
+.map-stats .stat-value{color:#e0eaf4;font-weight:600}
+
+/* ── Wafer KPI Card (Option B) ────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.kpi-card{background:#0a1425;border:1px solid #152540;border-radius:10px;padding:20px;text-align:center;transition:transform .2s,border-color .2s}
+.kpi-card:hover{transform:translateY(-2px);border-color:#1e4a6a}
+.kpi-wafer-id{font-size:22px;font-weight:700;color:#e0eaf4;margin-bottom:4px}
+.kpi-wafer-id span{color:#00d4aa}
+.kpi-lot{font-size:11px;color:#5a7a9a;margin-bottom:16px}
+.kpi-big-num{font-size:42px;font-weight:800;color:#fff;line-height:1}
+.kpi-big-label{font-size:11px;color:#5a7a9a;text-transform:uppercase;letter-spacing:1px;margin-top:4px;margin-bottom:16px}
+.kpi-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left}
+.kpi-metric{background:#0d1a2d;border-radius:6px;padding:10px}
+.kpi-metric .m-val{font-size:18px;font-weight:700;color:#e0eaf4}
+.kpi-metric .m-label{font-size:10px;color:#5a7a9a;text-transform:uppercase;letter-spacing:.5px}
+.recipe-bar{height:8px;border-radius:4px;overflow:hidden;display:flex;margin-top:12px}
+.recipe-bar .seg{height:100%;transition:width .4s}
+.recipe-legend{display:flex;gap:16px;margin-top:8px;font-size:11px}
+.recipe-legend span{display:flex;align-items:center;gap:4px;color:#7a9ab5}
+.recipe-legend .dot{width:8px;height:8px;border-radius:50%}
+
+/* ── Wafer Comparison (Option C) ──────────────────── */
+.comparison-wrap{display:flex;gap:20px;align-items:center;justify-content:center;flex-wrap:wrap}
+.comp-wafer{text-align:center}
+.comp-wafer canvas{display:block;border-radius:8px;margin:0 auto}
+.comp-wafer .comp-label{font-size:14px;font-weight:600;color:#e0eaf4;margin-top:8px}
+.comp-vs{font-size:24px;font-weight:800;color:#1e3a5f;padding:0 12px}
+.comp-stats{display:flex;flex-direction:column;gap:8px;min-width:180px}
+.comp-stat{display:flex;justify-content:space-between;background:#0a1425;border-radius:6px;padding:8px 12px;font-size:12px}
+.comp-stat .c-label{color:#5a7a9a}
+.comp-stat .c-val{color:#00d4aa;font-weight:600}
+
+/* ── Die Grid Navigator (Option A) ────────────────── */
+.die-grid-wrap{display:flex;gap:20px;flex-wrap:wrap}
+.die-grid-container{overflow:auto;max-height:520px}
+.die-grid{border-collapse:separate;border-spacing:2px}
+.die-grid th{font-size:9px;color:#3a5a7a;font-weight:600;padding:2px 0;text-align:center;min-width:20px;position:sticky;top:0;background:#0d1a2d;z-index:2}
+.die-grid .row-header{position:sticky;left:0;background:#0d1a2d;z-index:3;padding-right:4px}
+.die-cell{width:20px;height:18px;border-radius:2px;cursor:pointer;transition:all .15s;border:1px solid transparent;font-size:0}
+.die-cell.valid{background:#111e33}
+.die-cell.valid:hover{border-color:#3a7abf;z-index:1;transform:scale(1.3)}
+.die-cell.selected{border-color:#00d4aa;box-shadow:0 0 6px #00d4aa55}
+.die-cell.off-wafer{background:transparent}
+
+/* ── Die Detail Panel (Option B) ──────────────────── */
+.die-detail{background:#0a1425;border:1px solid #152540;border-radius:10px;padding:20px;min-width:320px;flex:1}
+.die-detail-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.die-pos{font-size:20px;font-weight:700;color:#e0eaf4}
+.die-count-badge{background:#00d4aa22;color:#00d4aa;font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px}
+.die-detail-empty{color:#3a5a7a;font-style:italic;text-align:center;padding:40px 0}
+.defect-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
+.defect-table thead{position:sticky;top:0}
+.defect-table th{background:#0d1a2d;color:#00d4aa;font-weight:600;text-align:left;padding:8px 10px;border-bottom:2px solid #1a2e4a;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.defect-table td{padding:7px 10px;border-bottom:1px solid #12203a;color:#a0b8d0}
+.defect-table tr:hover td{background:#111e3388}
+.die-scatter-box{margin-top:16px;background:#0d1a2d;border-radius:8px;padding:12px}
+.die-scatter-box canvas{display:block;margin:0 auto}
+.die-scatter-title{font-size:11px;color:#5a7a9a;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+
+/* ── Die Summary Cards (Option C) ─────────────────── */
+.die-cards-scroll{display:flex;gap:12px;overflow-x:auto;padding:8px 0 12px}
+.die-card{background:#0a1425;border:1px solid #152540;border-radius:10px;padding:14px;min-width:150px;flex-shrink:0;cursor:pointer;transition:all .2s}
+.die-card:hover{border-color:#1e4a6a;transform:translateY(-2px)}
+.die-card.high{border-left:3px solid #e74c3c}
+.die-card.med{border-left:3px solid #f0ad4e}
+.die-card.low{border-left:3px solid #2d8f5f}
+.die-card-pos{font-size:14px;font-weight:700;color:#e0eaf4}
+.die-card-count{font-size:24px;font-weight:800;margin:6px 0 2px}
+.die-card-count.high{color:#e74c3c}
+.die-card-count.med{color:#f0ad4e}
+.die-card-count.low{color:#2d8f5f}
+.die-card-label{font-size:10px;color:#5a7a9a;text-transform:uppercase;letter-spacing:.5px}
+.die-card-tags{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.die-card-tag{font-size:9px;padding:2px 6px;border-radius:3px;background:#111e33;color:#7a9ab5}
+.die-card-tag.r1{background:#3b82f622;color:#60a5fa}
+.die-card-tag.r2{background:#8b5cf622;color:#a78bfa}
+
+/* ── Combined Wafer → Die Drilldown ───────────────── */
+.drill-layout{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.drill-wafer{flex:0 0 auto;position:relative}
+.drill-wafer canvas{display:block;border-radius:8px;cursor:pointer}
+.drill-right{flex:1;min-width:340px;display:flex;flex-direction:column;gap:16px}
+.drill-die-view{background:#0a1425;border:1px solid #152540;border-radius:10px;overflow:hidden;position:relative;min-height:420px}
+.drill-die-header{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #152540;background:#0c1829}
+.drill-die-header .dh-pos{font-size:18px;font-weight:700;color:#e0eaf4}
+.drill-die-header .dh-badge{background:#00d4aa22;color:#00d4aa;font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px}
+.drill-die-header .dh-back{margin-left:auto;background:#111e33;border:1px solid #1e3a5f;color:#7a9ab5;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;transition:all .2s}
+.drill-die-header .dh-back:hover{border-color:#00d4aa;color:#00d4aa}
+.drill-die-canvas-wrap{padding:16px;position:relative}
+.drill-die-canvas-wrap canvas{display:block;margin:0 auto;border-radius:6px}
+.drill-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:420px;color:#3a5a7a;gap:8px}
+.drill-empty .de-icon{font-size:40px;opacity:.4}
+.drill-empty .de-text{font-size:14px}
+.drill-empty .de-hint{font-size:11px;color:#2a4a6a}
+.drill-info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:0 18px 16px}
+.drill-info-tile{background:#0c1829;border:1px solid #152540;border-radius:8px;padding:10px 12px;text-align:center}
+.drill-info-tile .dit-val{font-size:18px;font-weight:700;color:#e0eaf4}
+.drill-info-tile .dit-label{font-size:10px;color:#5a7a9a;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.drill-defect-table-wrap{padding:0 18px 18px;max-height:220px;overflow-y:auto}
+.drill-selected-ring{position:absolute;pointer-events:none;border:2px solid #00d4aa;border-radius:2px;box-shadow:0 0 8px #00d4aa66;transition:all .2s}
+
+/* ── Die Interior Map (Option E) ──────────────────── */
+.die-interior-wrap{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.die-interior-wrap canvas{display:block;border-radius:8px;background:#0a1425;border:1px solid #152540}
+.die-interior-info{background:#0a1425;border:1px solid #152540;border-radius:8px;padding:16px;min-width:200px;flex:1}
+.die-interior-info .di-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #152540;font-size:13px}
+.die-interior-info .di-row:last-child{border-bottom:none}
+.die-interior-info .di-label{color:#5a7a9a}
+.die-interior-info .di-val{color:#e0eaf4;font-weight:600}
+
+/* ── Die Bin Map (Option F) ───────────────────────── */
+.die-bin-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:11px}
+.die-bin-legend .bl-item{display:flex;align-items:center;gap:5px;color:#7a9ab5}
+.die-bin-legend .bl-swatch{width:12px;height:12px;border-radius:2px;border:1px solid #1e3a5f}
+
+/* ── Click Position Popup ─────────────────────────── */
+.pos-popup{position:fixed;z-index:1000;pointer-events:none;background:#0d1a2dee;border:1px solid #00d4aa;border-radius:8px;padding:10px 16px;font-size:12px;color:#e0eaf4;white-space:nowrap;opacity:0;transition:opacity .2s,transform .2s;transform:translateY(4px);box-shadow:0 4px 20px #00000088}
+.pos-popup.show{opacity:1;transform:translateY(0);pointer-events:auto}
+.pos-popup .pp-title{color:#00d4aa;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.pos-popup .pp-row{display:flex;justify-content:space-between;gap:20px;padding:2px 0}
+.pos-popup .pp-label{color:#5a7a9a}
+.pos-popup .pp-val{color:#fff;font-weight:600;font-family:'Cascadia Code','Consolas',monospace}
+.pos-popup .pp-close{position:absolute;top:4px;right:8px;color:#3a5a7a;cursor:pointer;font-size:14px;pointer-events:auto}
+.pos-popup .pp-close:hover{color:#e0eaf4}
+
+/* ── Clickable highlight ──────────────────────────── */
+.die-cell.valid{cursor:pointer}
+.kpi-metric.clickable{cursor:pointer;transition:all .2s}
+.kpi-metric.clickable:hover{border:1px solid #00d4aa44}
+.die-card{cursor:pointer}
+.comp-wafer canvas{cursor:crosshair}
+
+/* ── Utility ──────────────────────────────────────── */
+.flex-center{display:flex;justify-content:center}
+.mt-8{margin-top:8px}
+.text-muted{color:#3a5a7a}
+@media(max-width:768px){.kpi-grid,.die-grid-wrap,.wafer-map-wrap,.comparison-wrap{flex-direction:column}.kpi-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     PAGE HEADER
+     ═══════════════════════════════════════════════════ -->
+<header class="page-header">
+  <h1>WAFER & DIE COMPONENTS</h1>
+  <p>Scan: MTK-AHJ11236 &bull; EAGLET_106739 &bull; 180 defects &bull; 2 wafers &bull; Die grid 22&times;26</p>
+</header>
+
+<!-- ═══════════════════════════════════════════════════
+     COMBINED: WAFER → DIE DRILLDOWN
+     ═══════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title">WAFER → DIE DRILLDOWN</h2>
+
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge" style="background:#f0ad4e">COMBINED</span>
+      <h3>Wafer Map → Die Interior</h3>
+      <span class="desc">Click any die on the wafer to drill into its interior defect map</span>
+    </div>
+    <div class="card-body">
+      <div class="wafer-tabs" id="drillTabs"></div>
+      <div class="drill-layout">
+        <!-- Left: Wafer Map -->
+        <div class="drill-wafer">
+          <canvas id="drillWaferCanvas" width="420" height="420"></canvas>
+          <div class="map-tooltip" id="drillWaferTooltip"></div>
+          <div class="drill-selected-ring" id="drillSelRing" style="display:none"></div>
+          <div class="map-legend" style="margin-top:10px">
+            <span>0</span><div class="legend-bar"></div><span>5+</span>
+            <span style="margin-left:12px;color:#3a5a7a">defects / die</span>
+          </div>
+        </div>
+        <!-- Right: Die Interior (appears on click) -->
+        <div class="drill-right">
+          <div class="drill-die-view" id="drillDieView">
+            <div class="drill-empty" id="drillEmpty">
+              <div class="de-icon">&#9670;</div>
+              <div class="de-text">Select a die on the wafer map</div>
+              <div class="de-hint">Click any colored cell to drill into its defect layout</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     WAFER COMPONENTS
+     ═══════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title">WAFER COMPONENTS</h2>
+
+  <!-- ── Option A: Wafer Defect Map ─────────────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION A</span>
+      <h3>Wafer Defect Map</h3>
+      <span class="desc">Interactive circular wafer heatmap — hover &amp; click dies</span>
+    </div>
+    <div class="card-body">
+      <div class="wafer-tabs" id="mapTabs"></div>
+      <div class="wafer-map-wrap">
+        <div class="wafer-canvas-box">
+          <canvas id="waferMapCanvas" width="460" height="460"></canvas>
+          <div class="map-tooltip" id="mapTooltip"></div>
+          <div class="map-legend">
+            <span>0</span><div class="legend-bar"></div><span>5+</span>
+            <span style="margin-left:12px;color:#3a5a7a">defects / die</span>
+          </div>
+        </div>
+        <div class="map-stats" id="mapStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Option B: Wafer Summary KPI Cards ──────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION B</span>
+      <h3>Wafer Summary Cards</h3>
+      <span class="desc">KPI dashboard with recipe breakdown &amp; key metrics</span>
+    </div>
+    <div class="card-body">
+      <div class="kpi-grid" id="kpiGrid"></div>
+    </div>
+  </div>
+
+  <!-- ── Option C: Wafer Comparison ─────────────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION C</span>
+      <h3>Wafer Comparison</h3>
+      <span class="desc">Side-by-side wafer maps with delta analysis</span>
+    </div>
+    <div class="card-body">
+      <div class="comparison-wrap" id="comparisonWrap">
+        <div class="comp-wafer">
+          <canvas id="compCanvas1" width="260" height="260"></canvas>
+          <div class="comp-label">Wafer 01</div>
+        </div>
+        <div class="comp-vs">VS</div>
+        <div class="comp-wafer">
+          <canvas id="compCanvas2" width="260" height="260"></canvas>
+          <div class="comp-label">Wafer 02</div>
+        </div>
+        <div class="comp-stats" id="compStats"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     DIE COMPONENTS
+     ═══════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title">DIE COMPONENTS</h2>
+
+  <!-- ── Option A: Die Grid Navigator ───────────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION A</span>
+      <h3>Die Grid Navigator</h3>
+      <span class="desc">Full 22&times;26 interactive grid — click a die to inspect</span>
+    </div>
+    <div class="card-body">
+      <div class="wafer-tabs" id="dieGridTabs"></div>
+      <div class="die-grid-wrap">
+        <div class="die-grid-container" id="dieGridContainer"></div>
+        <div class="die-detail" id="dieGridDetail">
+          <div class="die-detail-empty">Click a die cell to view defect details</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Option B: Die Detail Panel ─────────────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION B</span>
+      <h3>Die Detail Panel</h3>
+      <span class="desc">Expanded defect table with coordinate scatter plot</span>
+    </div>
+    <div class="card-body">
+      <div class="wafer-tabs" id="dieDetailTabs"></div>
+      <div id="dieDetailPanel">
+        <div class="die-detail-empty">Select a die from the dropdown to view full details</div>
+      </div>
+      <div style="margin-top:8px">
+        <label style="font-size:12px;color:#5a7a9a;margin-right:8px">Die:</label>
+        <select id="dieSelect" style="background:#111e33;border:1px solid #1e3a5f;color:#c8d6e5;padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer"></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Option C: Die Summary Cards ────────────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION C</span>
+      <h3>Die Summary Cards</h3>
+      <span class="desc">Scrollable card strip — sorted by defect severity</span>
+    </div>
+    <div class="card-body">
+      <div class="wafer-tabs" id="dieCardsTabs"></div>
+      <div class="die-cards-scroll" id="dieCardsScroll"></div>
+    </div>
+  </div>
+
+  <!-- ── Option D: Die Map (like Wafer Map) ─────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION D</span>
+      <h3>Die Map</h3>
+      <span class="desc">Rectangular die grid map — same visual language as the Wafer Map. Click any die for position.</span>
+    </div>
+    <div class="card-body">
+      <div class="wafer-tabs" id="dieMapTabs"></div>
+      <div class="wafer-map-wrap">
+        <div class="wafer-canvas-box">
+          <canvas id="dieMapCanvas" width="520" height="460"></canvas>
+          <div class="map-tooltip" id="dieMapTooltip"></div>
+          <div class="map-legend">
+            <span>0</span><div class="legend-bar"></div><span>5+</span>
+            <span style="margin-left:12px;color:#3a5a7a">defects / die</span>
+          </div>
+        </div>
+        <div class="map-stats" id="dieMapStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Option E: Die Interior Map ─────────────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION E</span>
+      <h3>Die Interior Map</h3>
+      <span class="desc">Zoomed-in view of a single die — each defect plotted by Wafer X/Y. Click defects for coordinates.</span>
+    </div>
+    <div class="card-body">
+      <div class="wafer-tabs" id="dieInteriorTabs"></div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;color:#5a7a9a;margin-right:8px">Die:</label>
+        <select id="dieInteriorSelect" style="background:#111e33;border:1px solid #1e3a5f;color:#c8d6e5;padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer"></select>
+      </div>
+      <div class="die-interior-wrap">
+        <div class="wafer-canvas-box">
+          <canvas id="dieInteriorCanvas" width="500" height="400"></canvas>
+          <div class="map-tooltip" id="dieInteriorTooltip"></div>
+        </div>
+        <div class="die-interior-info" id="dieInteriorInfo"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Option F: Die Bin Map ──────────────────── -->
+  <div class="component-card">
+    <div class="card-header">
+      <span class="option-badge">OPTION F</span>
+      <h3>Die Bin Map</h3>
+      <span class="desc">Dies colored by classification bin (OClass). Click to see class &amp; zone breakdown.</span>
+    </div>
+    <div class="card-body">
+      <div class="wafer-tabs" id="dieBinTabs"></div>
+      <div class="wafer-map-wrap">
+        <div class="wafer-canvas-box">
+          <canvas id="dieBinCanvas" width="520" height="460"></canvas>
+          <div class="map-tooltip" id="dieBinTooltip"></div>
+          <div class="die-bin-legend" id="dieBinLegend"></div>
+        </div>
+        <div class="map-stats" id="dieBinStats"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Position popup (global) -->
+<div class="pos-popup" id="posPopup">
+  <span class="pp-close" id="posPopupClose">&times;</span>
+  <div class="pp-title" id="ppTitle">Position</div>
+  <div id="ppContent"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   GLOBAL POSITION POPUP
+   ═══════════════════════════════════════════════════════ */
+const posPopup = document.getElementById('posPopup');
+const ppTitle = document.getElementById('ppTitle');
+const ppContent = document.getElementById('ppContent');
+let popupTimer = null;
+
+function showPosPopup(x, y, title, rows) {
+  ppTitle.textContent = title;
+  ppContent.innerHTML = rows.map(([label, val]) =>
+    `<div class="pp-row"><span class="pp-label">${label}</span><span class="pp-val">${val}</span></div>`
+  ).join('');
+  posPopup.style.left = Math.min(x + 16, window.innerWidth - 280) + 'px';
+  posPopup.style.top = Math.min(y - 10, window.innerHeight - 200) + 'px';
+  posPopup.classList.add('show');
+  clearTimeout(popupTimer);
+  popupTimer = setTimeout(() => posPopup.classList.remove('show'), 4000);
+}
+
+document.getElementById('posPopupClose').addEventListener('click', () => {
+  posPopup.classList.remove('show');
+});
+document.addEventListener('click', e => {
+  if (!posPopup.contains(e.target) && !e.target.closest('canvas') && !e.target.closest('.die-cell') && !e.target.closest('.die-card') && !e.target.closest('.defect-table')) {
+    posPopup.classList.remove('show');
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
+   DATA — parsed from DB.csv (MTK-AHJ11236_setup1)
+   ═══════════════════════════════════════════════════════ */
+const CSV_RAW = `ImageName,Tool,Job Name,Setup Name,Recipe,Recipe Name,Wafer,Lot,Col,Row,Mode,OClass,Index,Wafer X,Wafer Y,XInFrame,YInFrame,Zone
+images/lot_01/259793.119486.c.-1615541774.1.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,1,x7.5 Bump PMI,01,lot,18,8,Color,1,0,259794.29,119487.37,0,0,7
+images/lot_01/152375.175085.c.1440709828.1.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,1,x7.5 Bump PMI,01,lot,9,14,Color,1,134217728,152373.26,175085.39,0,0,9
+images/lot_01/248222.270055.c.581300899.1.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,1,x7.5 Bump PMI,01,lot,17,22,Color,1,134217729,248224.88,270055.49,0,0,9
+images/lot_01/26163.131595.c.67609716.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,10,Color,1,134217730,26164.93,131598.85,0,0,63
+images/lot_01/26166.131934.c.-154061261.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,10,Color,1,134217731,26166.14,131937.24,0,0,63
+images/lot_01/32079.172085.c.1741714144.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,13,Color,1,134217732,32081.99,172087.42,0,0,63
+images/lot_01/26164.153740.c.928396196.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,12,Color,1,134217733,26165.75,153742.22,0,0,63
+images/lot_01/31467.161366.c.-873880577.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,12,Color,1,134217734,31464.55,161368.39,0,0,63
+images/lot_01/30316.162042.c.311461136.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,12,Color,1,134217735,30320.51,162043.98,0,0,63
+images/lot_01/31566.155135.c.-1724503200.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,12,Color,1,134217736,31570.27,155137.40,0,0,63
+images/lot_01/32754.163716.c.324461848.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,13,Color,1,134217737,32755.51,163718.54,0,0,63
+images/lot_01/27277.139795.c.-689808383.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,10,Color,1,134217739,27280.85,139799.36,0,0,63
+images/lot_01/29814.140098.c.-305331072.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,10,Color,1,134217740,29814.46,140099.73,0,0,63
+images/lot_01/27853.151993.c.-782797117.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,11,Color,1,134217741,27852.88,151996.45,0,0,63
+images/lot_01/26952.152378.c.533983132.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,11,Color,1,134217742,26952.10,152381.82,0,0,63
+images/lot_01/27524.152918.c.1194581235.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,12,Color,1,134217743,27525.34,152919.20,0,0,63
+images/lot_01/33990.183740.c.1915258471.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,14,Color,1,134217744,33989.57,183742.99,0,0,63
+images/lot_01/31715.139562.c.-1556879161.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,10,Color,1,134217746,31712.37,139565.04,0,0,63
+images/lot_01/28052.142065.c.1519987901.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,11,Color,1,134217747,28050.89,142067.25,0,0,63
+images/lot_01/26164.142498.c.-291707291.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,11,Color,1,134217748,26167.44,142500.78,0,0,63
+images/lot_01/26166.142835.c.1152762836.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,11,Color,1,134217749,26168.64,142836.77,0,0,63
+images/lot_01/32413.165871.c.-1365456902.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,0,13,Color,1,134217750,32414.61,165874.02,0,0,63
+images/lot_01/39828.104039.c.43406013.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,7,Color,1,134217751,39825.44,104042.57,0,0,63
+images/lot_01/44113.100830.c.-786845096.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,7,Color,1,134217752,44110.31,100833.58,0,0,63
+images/lot_01/47350.101514.c.-1771368312.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,7,Color,1,134217753,47351.11,101518.07,0,0,63
+images/lot_01/47683.101936.c.-515239025.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,7,Color,34,134217754,47682.28,101938.36,0,0,63
+images/lot_01/40222.213931.c.844763824.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,17,Color,1,134217756,40227.80,213933.32,0,0,63
+images/lot_01/46230.227702.c.1977528071.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,18,Color,1,134217757,46231.39,227704.63,0,0,63
+images/lot_01/39018.222001.c.312579125.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,18,Color,1,134217758,39020.21,222003.94,0,0,63
+images/lot_01/43190.101027.c.-1365293534.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,7,Color,1,134217759,43188.59,101031.13,0,0,63
+images/lot_01/41660.216319.c.1936429970.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,1,17,Color,1,134217760,41659.63,216320.27,0,0,63
+images/lot_01/61311.248259.c.2024629824.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,2,20,Color,1,134217761,61310.45,248259.69,0,0,63
+images/lot_01/53317.228445.c.1743467057.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,2,18,Color,1,134217762,53317.62,228447.83,0,0,63
+images/lot_01/55646.79113.c.-637232887.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,2,5,Color,1,134217763,55646.85,79116.57,0,0,63
+images/lot_01/57425.95711.c.-1362920763.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,2,6,Color,1,134217764,57426.88,95714.70,0,0,63
+images/lot_01/56729.95264.c.-1811426001.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,2,6,Color,1,134217765,56731.73,95268.25,0,0,63
+images/lot_01/54494.85463.c.210163462.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,2,5,Color,1,134217766,54493.75,85466.71,0,0,63
+images/lot_01/57901.79494.c.-215832760.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,2,5,Color,1,134217767,57901.16,79496.95,0,0,63
+images/lot_01/73463.244110.c.-953625077.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,3,20,Color,30,134217768,73462.81,244110.60,0,0,63
+images/lot_01/85766.58346.c.-2040042958.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,4,3,Color,1,134217769,85769.64,58348.32,0,0,63
+images/lot_01/89094.55486.c.-744191893.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,4,3,Color,1,134217770,89096.10,55488.51,0,0,63
+images/lot_01/79140.217458.c.-1641341989.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,4,17,Color,1,134217771,79140.17,217460.53,0,0,63
+images/lot_01/95786.45843.c.-2030377277.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,5,2,Color,1,134217772,95786.48,45846.78,0,0,63
+images/lot_01/94425.282538.c.-1842968014.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,5,23,Color,1,134217773,94428.43,282539.19,0,0,63
+images/lot_01/96110.149808.c.-1703782608.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,5,11,Color,1,134217774,96115.47,149810.17,0,0,63
+images/lot_01/105639.33124.c.1482081634.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,6,1,Color,1,134217775,105644.93,33127.61,0,0,63
+images/lot_01/106255.36908.c.-1569195878.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,6,1,Color,1,134217776,106258.07,36911.21,0,0,63
+images/lot_01/120463.292867.c.325610915.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,7,24,Color,1,134217777,120463.43,292868.99,0,0,63
+images/lot_01/125490.291548.c.77695041.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,7,24,Color,1,134217778,125492.04,291549.59,0,0,63
+images/lot_01/113519.272779.c.-1237130129.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,6,23,Color,1,134217779,113519.74,272780.16,0,0,63
+images/lot_01/151194.304516.c.545787009.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,9,25,Color,1,134217780,151194.70,304517.57,0,0,63
+images/lot_01/144742.303591.c.761638340.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,9,25,Color,1,134217781,144746.24,303592.48,0,0,63
+images/lot_01/156361.305021.c.-1066429503.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,10,25,Color,1,134217782,156362.38,305021.37,0,0,63
+images/lot_01/161058.303379.c.2129389183.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,10,25,Color,1,134217784,161061.99,303379.91,0,0,63
+images/lot_01/160580.303596.c.1617562753.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,10,25,Color,1,134217785,160583.90,303596.68,0,0,63
+images/lot_01/159258.304497.c.849180444.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,10,25,Color,1,134217786,159264.04,304497.46,0,0,63
+images/lot_01/156875.300483.c.731059218.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,10,25,Color,1,134217789,156879.67,300485.13,0,0,63
+images/lot_01/167884.304208.c.1425950394.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,11,25,Color,1,134217791,167888.51,304208.58,0,0,63
+images/lot_01/168455.305006.c.103802809.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,11,25,Color,1,134217792,168460.53,305006.99,0,0,63
+images/lot_01/176832.301790.c.-349240868.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,11,25,Color,1,134217794,176833.84,301791.98,0,0,63
+images/lot_01/173237.302723.c.1370018182.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,11,25,Color,1,134217795,173240.84,302724.53,0,0,63
+images/lot_01/176475.300992.c.1082019189.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,11,25,Color,1,134217796,176477.28,300994.38,0,0,63
+images/lot_01/169789.27930.c.554558486.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,11,0,Color,1,134217797,169794.45,27932.44,0,0,63
+images/lot_01/185853.22258.c.-1770963185.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,12,0,Color,1,134217798,185855.29,22259.73,0,0,63
+images/lot_01/182252.304770.c.-206217131.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,12,25,Color,1,134217799,182249.73,304772.14,0,0,63
+images/lot_01/198103.238131.c.1551509282.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,13,19,Color,1,134217800,198107.27,238132.92,0,0,63
+images/lot_01/212735.274839.c.1325924846.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,14,23,Color,1,134217801,212736.21,274840.38,0,0,63
+images/lot_01/205858.226084.c.-1098208404.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,13,18,Color,1,134217802,205865.62,226085.21,0,0,63
+images/lot_01/226491.293994.c.909425451.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,15,24,Color,1,134217803,226494.60,293994.92,0,0,63
+images/lot_01/231816.287341.c.1197757826.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,15,24,Color,1,134217804,231815.70,287341.26,0,0,63
+images/lot_01/244712.44201.c.-704407851.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,16,2,Color,1,134217805,244717.12,44203.28,0,0,63
+images/lot_01/233494.283154.c.794075460.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,16,23,Color,1,134217806,233498.05,283154.74,0,0,63
+images/lot_01/244560.281425.c.-327360856.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,16,23,Color,1,134217807,244562.15,281425.40,0,0,63
+images/lot_01/250984.270650.c.1416539081.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,17,22,Color,1,134217808,250985.54,270650.23,0,0,63
+images/lot_01/256420.61514.c.1570679280.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,17,3,Color,1,134217809,256425.32,61515.47,0,0,63
+images/lot_01/254723.64866.c.1382159840.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,17,3,Color,1,134217810,254727.32,64866.91,0,0,63
+images/lot_01/260484.106863.c.-1614171001.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,18,7,Color,1,134217811,260486.95,106863.38,0,0,63
+images/lot_01/260355.228367.c.-83056378.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,18,18,Color,1,134217812,260355.47,228368.25,0,0,63
+images/lot_01/283440.76897.c.683309871.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,19,5,Color,1,134217813,283443.72,76898.76,0,0,63
+images/lot_01/283449.90895.c.1065431571.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,19,6,Color,1,134217814,283454.02,90896.48,0,0,63
+images/lot_01/268327.89228.c.-1225337024.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,18,6,Color,1,134217815,268333.59,89229.86,0,0,63
+images/lot_01/268490.87315.c.1647186007.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,18,6,Color,1,134217816,268493.76,87317.50,0,0,63
+images/lot_01/280586.114198.c.1013341150.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,19,8,Color,1,134217817,280587.44,114199.67,0,0,63
+images/lot_01/296491.100967.c.1362865058.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,20,7,Color,1,134217818,296498.91,100968.63,0,0,63
+images/lot_01/293595.199654.c.-1357404856.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,20,16,Color,1,134217819,293598.51,199654.69,0,0,63
+images/lot_01/292533.106204.c.1372060528.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,20,7,Color,1,134217820,292537.50,106205.34,0,0,63
+images/lot_01/295236.207369.c.-1702648161.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,20,17,Color,1,134217821,295238.58,207368.89,0,0,63
+images/lot_01/290039.172660.c.1504901015.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,20,13,Color,1,134217822,290038.60,172660.97,0,0,63
+images/lot_01/299607.141864.c.2011336309.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,21,11,Color,1,134217823,299614.36,141864.54,0,0,63
+images/lot_01/303024.151346.c.-1115660620.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,01,lot,21,11,Color,1,134217824,303025.31,151347.22,0,0,63
+images/lot_02/259793.119486.c.-1615541774.1.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,1,x7.5 Bump PMI,02,lot,18,8,Color,1,0,259794.29,119487.37,0,0,7
+images/lot_02/152375.175085.c.1440709828.1.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,1,x7.5 Bump PMI,02,lot,9,14,Color,1,134217728,152373.26,175085.39,0,0,9
+images/lot_02/248222.270055.c.581300899.1.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,1,x7.5 Bump PMI,02,lot,17,22,Color,1,134217729,248224.88,270055.49,0,0,9
+images/lot_02/26163.131595.c.67609716.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,10,Color,1,134217730,26164.93,131598.85,0,0,63
+images/lot_02/26166.131934.c.-154061261.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,10,Color,1,134217731,26166.14,131937.24,0,0,63
+images/lot_02/32079.172085.c.1741714144.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,13,Color,1,134217732,32081.99,172087.42,0,0,63
+images/lot_02/26164.153740.c.928396196.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,12,Color,1,134217733,26165.75,153742.22,0,0,63
+images/lot_02/31467.161366.c.-873880577.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,12,Color,1,134217734,31464.55,161368.39,0,0,63
+images/lot_02/30316.162042.c.311461136.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,12,Color,1,134217735,30320.51,162043.98,0,0,63
+images/lot_02/31566.155135.c.-1724503200.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,12,Color,1,134217736,31570.27,155137.40,0,0,63
+images/lot_02/32754.163716.c.324461848.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,13,Color,1,134217737,32755.51,163718.54,0,0,63
+images/lot_02/27277.139795.c.-689808383.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,10,Color,1,134217739,27280.85,139799.36,0,0,63
+images/lot_02/29814.140098.c.-305331072.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,10,Color,1,134217740,29814.46,140099.73,0,0,63
+images/lot_02/27853.151993.c.-782797117.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,11,Color,1,134217741,27852.88,151996.45,0,0,63
+images/lot_02/26952.152378.c.533983132.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,11,Color,1,134217742,26952.10,152381.82,0,0,63
+images/lot_02/27524.152918.c.1194581235.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,12,Color,1,134217743,27525.34,152919.20,0,0,63
+images/lot_02/33990.183740.c.1915258471.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,14,Color,1,134217744,33989.57,183742.99,0,0,63
+images/lot_02/31715.139562.c.-1556879161.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,10,Color,1,134217746,31712.37,139565.04,0,0,63
+images/lot_02/28052.142065.c.1519987901.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,11,Color,1,134217747,28050.89,142067.25,0,0,63
+images/lot_02/26164.142498.c.-291707291.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,11,Color,1,134217748,26167.44,142500.78,0,0,63
+images/lot_02/26166.142835.c.1152762836.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,11,Color,1,134217749,26168.64,142836.77,0,0,63
+images/lot_02/32413.165871.c.-1365456902.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,0,13,Color,1,134217750,32414.61,165874.02,0,0,63
+images/lot_02/39828.104039.c.43406013.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,7,Color,1,134217751,39825.44,104042.57,0,0,63
+images/lot_02/44113.100830.c.-786845096.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,7,Color,1,134217752,44110.31,100833.58,0,0,63
+images/lot_02/47350.101514.c.-1771368312.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,7,Color,1,134217753,47351.11,101518.07,0,0,63
+images/lot_02/47683.101936.c.-515239025.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,7,Color,34,134217754,47682.28,101938.36,0,0,63
+images/lot_02/40222.213931.c.844763824.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,17,Color,1,134217756,40227.80,213933.32,0,0,63
+images/lot_02/46230.227702.c.1977528071.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,18,Color,1,134217757,46231.39,227704.63,0,0,63
+images/lot_02/39018.222001.c.312579125.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,18,Color,1,134217758,39020.21,222003.94,0,0,63
+images/lot_02/43190.101027.c.-1365293534.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,7,Color,1,134217759,43188.59,101031.13,0,0,63
+images/lot_02/41660.216319.c.1936429970.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,1,17,Color,1,134217760,41659.63,216320.27,0,0,63
+images/lot_02/61311.248259.c.2024629824.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,2,20,Color,1,134217761,61310.45,248259.69,0,0,63
+images/lot_02/53317.228445.c.1743467057.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,2,18,Color,1,134217762,53317.62,228447.83,0,0,63
+images/lot_02/55646.79113.c.-637232887.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,2,5,Color,1,134217763,55646.85,79116.57,0,0,63
+images/lot_02/57425.95711.c.-1362920763.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,2,6,Color,1,134217764,57426.88,95714.70,0,0,63
+images/lot_02/56729.95264.c.-1811426001.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,2,6,Color,1,134217765,56731.73,95268.25,0,0,63
+images/lot_02/54494.85463.c.210163462.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,2,5,Color,1,134217766,54493.75,85466.71,0,0,63
+images/lot_02/57901.79494.c.-215832760.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,2,5,Color,1,134217767,57901.16,79496.95,0,0,63
+images/lot_02/73463.244110.c.-953625077.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,3,20,Color,30,134217768,73462.81,244110.60,0,0,63
+images/lot_02/85766.58346.c.-2040042958.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,4,3,Color,1,134217769,85769.64,58348.32,0,0,63
+images/lot_02/89094.55486.c.-744191893.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,4,3,Color,1,134217770,89096.10,55488.51,0,0,63
+images/lot_02/79140.217458.c.-1641341989.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,4,17,Color,1,134217771,79140.17,217460.53,0,0,63
+images/lot_02/95786.45843.c.-2030377277.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,5,2,Color,1,134217772,95786.48,45846.78,0,0,63
+images/lot_02/94425.282538.c.-1842968014.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,5,23,Color,1,134217773,94428.43,282539.19,0,0,63
+images/lot_02/96110.149808.c.-1703782608.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,5,11,Color,1,134217774,96115.47,149810.17,0,0,63
+images/lot_02/105639.33124.c.1482081634.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,6,1,Color,1,134217775,105644.93,33127.61,0,0,63
+images/lot_02/106255.36908.c.-1569195878.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,6,1,Color,1,134217776,106258.07,36911.21,0,0,63
+images/lot_02/120463.292867.c.325610915.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,7,24,Color,1,134217777,120463.43,292868.99,0,0,63
+images/lot_02/125490.291548.c.77695041.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,7,24,Color,1,134217778,125492.04,291549.59,0,0,63
+images/lot_02/113519.272779.c.-1237130129.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,6,23,Color,1,134217779,113519.74,272780.16,0,0,63
+images/lot_02/151194.304516.c.545787009.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,9,25,Color,1,134217780,151194.70,304517.57,0,0,63
+images/lot_02/144742.303591.c.761638340.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,9,25,Color,1,134217781,144746.24,303592.48,0,0,63
+images/lot_02/156361.305021.c.-1066429503.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,10,25,Color,1,134217782,156362.38,305021.37,0,0,63
+images/lot_02/161058.303379.c.2129389183.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,10,25,Color,1,134217784,161061.99,303379.91,0,0,63
+images/lot_02/160580.303596.c.1617562753.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,10,25,Color,1,134217785,160583.90,303596.68,0,0,63
+images/lot_02/159258.304497.c.849180444.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,10,25,Color,1,134217786,159264.04,304497.46,0,0,63
+images/lot_02/156875.300483.c.731059218.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,10,25,Color,1,134217789,156879.67,300485.13,0,0,63
+images/lot_02/167884.304208.c.1425950394.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,11,25,Color,1,134217791,167888.51,304208.58,0,0,63
+images/lot_02/168455.305006.c.103802809.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,11,25,Color,1,134217792,168460.53,305006.99,0,0,63
+images/lot_02/176832.301790.c.-349240868.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,11,25,Color,1,134217794,176833.84,301791.98,0,0,63
+images/lot_02/173237.302723.c.1370018182.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,11,25,Color,1,134217795,173240.84,302724.53,0,0,63
+images/lot_02/176475.300992.c.1082019189.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,11,25,Color,1,134217796,176477.28,300994.38,0,0,63
+images/lot_02/169789.27930.c.554558486.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,11,0,Color,1,134217797,169794.45,27932.44,0,0,63
+images/lot_02/185853.22258.c.-1770963185.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,12,0,Color,1,134217798,185855.29,22259.73,0,0,63
+images/lot_02/182252.304770.c.-206217131.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,12,25,Color,1,134217799,182249.73,304772.14,0,0,63
+images/lot_02/198103.238131.c.1551509282.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,13,19,Color,1,134217800,198107.27,238132.92,0,0,63
+images/lot_02/212735.274839.c.1325924846.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,14,23,Color,1,134217801,212736.21,274840.38,0,0,63
+images/lot_02/205858.226084.c.-1098208404.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,13,18,Color,1,134217802,205865.62,226085.21,0,0,63
+images/lot_02/226491.293994.c.909425451.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,15,24,Color,1,134217803,226494.60,293994.92,0,0,63
+images/lot_02/231816.287341.c.1197757826.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,15,24,Color,1,134217804,231815.70,287341.26,0,0,63
+images/lot_02/244712.44201.c.-704407851.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,16,2,Color,1,134217805,244717.12,44203.28,0,0,63
+images/lot_02/233494.283154.c.794075460.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,16,23,Color,1,134217806,233498.05,283154.74,0,0,63
+images/lot_02/244560.281425.c.-327360856.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,16,23,Color,1,134217807,244562.15,281425.40,0,0,63
+images/lot_02/250984.270650.c.1416539081.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,17,22,Color,1,134217808,250985.54,270650.23,0,0,63
+images/lot_02/256420.61514.c.1570679280.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,17,3,Color,1,134217809,256425.32,61515.47,0,0,63
+images/lot_02/254723.64866.c.1382159840.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,17,3,Color,1,134217810,254727.32,64866.91,0,0,63
+images/lot_02/260484.106863.c.-1614171001.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,18,7,Color,1,134217811,260486.95,106863.38,0,0,63
+images/lot_02/260355.228367.c.-83056378.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,18,18,Color,1,134217812,260355.47,228368.25,0,0,63
+images/lot_02/283440.76897.c.683309871.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,19,5,Color,1,134217813,283443.72,76898.76,0,0,63
+images/lot_02/283449.90895.c.1065431571.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,19,6,Color,1,134217814,283454.02,90896.48,0,0,63
+images/lot_02/268327.89228.c.-1225337024.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,18,6,Color,1,134217815,268333.59,89229.86,0,0,63
+images/lot_02/268490.87315.c.1647186007.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,18,6,Color,1,134217816,268493.76,87317.50,0,0,63
+images/lot_02/280586.114198.c.1013341150.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,19,8,Color,1,134217817,280587.44,114199.67,0,0,63
+images/lot_02/296491.100967.c.1362865058.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,20,7,Color,1,134217818,296498.91,100968.63,0,0,63
+images/lot_02/293595.199654.c.-1357404856.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,20,16,Color,1,134217819,293598.51,199654.69,0,0,63
+images/lot_02/292533.106204.c.1372060528.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,20,7,Color,1,134217820,292537.50,106205.34,0,0,63
+images/lot_02/295236.207369.c.-1702648161.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,20,17,Color,1,134217821,295238.58,207368.89,0,0,63
+images/lot_02/290039.172660.c.1504901015.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,20,13,Color,1,134217822,290038.60,172660.97,0,0,63
+images/lot_02/299607.141864.c.2011336309.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,21,11,Color,1,134217823,299614.36,141864.54,0,0,63
+images/lot_02/303024.151346.c.-1115660620.2.jpeg,EAGLET_106739,MTK-AHJ11236,setup1,2,x3.5 Surface,02,lot,21,11,Color,1,134217824,303025.31,151347.22,0,0,63`;
+
+/* ── Parse CSV ────────────────────────────────────── */
+const COLS = 22, ROWS = 26;
+let defects = [];
+CSV_RAW.trim().split('\n').slice(1).forEach(line => {
+  const f = line.split(',');
+  defects.push({
+    image: f[0], tool: f[1], job: f[2], setup: f[3],
+    recipe: +f[4], recipeName: f[5], wafer: f[6], lot: f[7],
+    col: +f[8], row: +f[9], mode: f[10], oclass: +f[11],
+    index: +f[12], wx: +f[13], wy: +f[14], zone: +f[17]
+  });
+});
+const waferIds = [...new Set(defects.map(d => d.wafer))].sort();
+
+/* ── Aggregation Helpers ──────────────────────────── */
+function byWafer(wid) { return defects.filter(d => d.wafer === wid); }
+function dieKey(c, r) { return c + ',' + r; }
+
+function dieDefectMap(wid) {
+  const m = {};
+  byWafer(wid).forEach(d => {
+    const k = dieKey(d.col, d.row);
+    if (!m[k]) m[k] = [];
+    m[k].push(d);
+  });
+  return m;
+}
+
+function waferStats(wid) {
+  const wd = byWafer(wid);
+  const dm = dieDefectMap(wid);
+  const dies = Object.keys(dm);
+  const r1 = wd.filter(d => d.recipe === 1).length;
+  const r2 = wd.filter(d => d.recipe === 2).length;
+  const maxDie = dies.reduce((a, b) => dm[a].length >= dm[b].length ? a : b, dies[0]);
+  const zones = {};
+  wd.forEach(d => { zones[d.zone] = (zones[d.zone] || 0) + 1; });
+  return { total: wd.length, diesAffected: dies.length, r1, r2, maxDie, maxCount: dm[maxDie]?.length || 0, zones, dm };
+}
+
+/* ── Wafer circle helper ──────────────────────────── */
+function isOnWafer(col, row) {
+  const cx = (col + 0.5) / COLS * 2 - 1;
+  const cy = (row + 0.5) / ROWS * 2 - 1;
+  return (cx * cx + cy * cy) <= 1.02;
+}
+
+function defectColor(count) {
+  if (count === 0) return '#141f30';
+  if (count === 1) return '#1a5e50';
+  if (count === 2) return '#2d8f5f';
+  if (count === 3) return '#d4a017';
+  if (count === 4) return '#e67e22';
+  return '#e74c3c';
+}
+
+/* ═══════════════════════════════════════════════════
+   WAFER MAP — Option A (Canvas)
+   ═══════════════════════════════════════════════════ */
+let activeMapWafer = '01';
+
+function drawWaferMap(canvasId, wid, size) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const pad = 20;
+  const radius = (Math.min(w, h) - pad * 2) / 2;
+  const cx = w / 2, cy = h / 2;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Wafer circle background
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = '#0b1525';
+  ctx.fill();
+  ctx.strokeStyle = '#1e3a5f';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  // Notch (flat at bottom)
+  ctx.save();
+  ctx.fillStyle = '#080e1a';
+  ctx.fillRect(cx - 12, cy + radius - 2, 24, 8);
+  ctx.restore();
+
+  // Die grid
+  const dm = dieDefectMap(wid);
+  const cellW = (radius * 2) / COLS;
+  const cellH = (radius * 2) / ROWS;
+  const ox = cx - radius;
+  const oy = cy - radius;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - 1, 0, Math.PI * 2);
+  ctx.clip();
+
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      if (!isOnWafer(c, r)) continue;
+      const x = ox + c * cellW;
+      const y = oy + r * cellH;
+      const k = dieKey(c, r);
+      const count = dm[k] ? dm[k].length : 0;
+      ctx.fillStyle = defectColor(count);
+      ctx.fillRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
+      if (count > 0) {
+        ctx.fillStyle = count >= 4 ? '#fff' : '#c8d6e5';
+        ctx.font = `bold ${Math.max(8, cellW * 0.45)}px Segoe UI`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(count, x + cellW / 2, y + cellH / 2);
+      }
+    }
+  }
+  ctx.restore();
+
+  // Outer ring label
+  ctx.fillStyle = '#3a5a7a';
+  ctx.font = '11px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('Wafer ' + wid, cx, cy - radius - 6);
+
+  return { ox, oy, cellW, cellH, dm };
+}
+
+/* ── Wafer Map tooltip & interaction ──────────────── */
+let mapMeta = null;
+function initWaferMap() {
+  // Tabs
+  const tabsEl = document.getElementById('mapTabs');
+  tabsEl.innerHTML = waferIds.map(w =>
+    `<button class="wafer-tab${w === activeMapWafer ? ' active' : ''}" data-w="${w}">Wafer ${w}</button>`
+  ).join('');
+  tabsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.wafer-tab');
+    if (!btn) return;
+    activeMapWafer = btn.dataset.w;
+    tabsEl.querySelectorAll('.wafer-tab').forEach(b => b.classList.toggle('active', b === btn));
+    mapMeta = drawWaferMap('waferMapCanvas', activeMapWafer, 460);
+    updateMapStats();
+  });
+
+  mapMeta = drawWaferMap('waferMapCanvas', activeMapWafer, 460);
+  updateMapStats();
+
+  // Tooltip
+  const canvas = document.getElementById('waferMapCanvas');
+  const tip = document.getElementById('mapTooltip');
+  canvas.addEventListener('mousemove', e => {
+    if (!mapMeta) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const col = Math.floor((mx - mapMeta.ox) / mapMeta.cellW);
+    const row = Math.floor((my - mapMeta.oy) / mapMeta.cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS && isOnWafer(col, row)) {
+      const k = dieKey(col, row);
+      const count = mapMeta.dm[k] ? mapMeta.dm[k].length : 0;
+      const recipes = mapMeta.dm[k] ? [...new Set(mapMeta.dm[k].map(d => d.recipeName))].join(', ') : '—';
+      tip.innerHTML = `<b>Die (${col}, ${row})</b><br>Defects: ${count}<br>Recipe: ${recipes}`;
+      tip.style.left = (mx + 14) + 'px';
+      tip.style.top = (my - 10) + 'px';
+      tip.classList.add('visible');
+    } else {
+      tip.classList.remove('visible');
+    }
+  });
+  canvas.addEventListener('mouseleave', () => tip.classList.remove('visible'));
+
+  // Click → show position popup
+  canvas.addEventListener('click', e => {
+    if (!mapMeta) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const col = Math.floor((mx - mapMeta.ox) / mapMeta.cellW);
+    const row = Math.floor((my - mapMeta.oy) / mapMeta.cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS && isOnWafer(col, row)) {
+      const k = dieKey(col, row);
+      const list = mapMeta.dm[k] || [];
+      const avgX = list.length ? Math.round(list.reduce((s, d) => s + d.wx, 0) / list.length) : '—';
+      const avgY = list.length ? Math.round(list.reduce((s, d) => s + d.wy, 0) / list.length) : '—';
+      showPosPopup(e.clientX, e.clientY, `Die (${col}, ${row})`, [
+        ['Die Col', col],
+        ['Die Row', row],
+        ['Defects', list.length],
+        ['Avg Wafer X', avgX + (list.length ? ' \u00B5m' : '')],
+        ['Avg Wafer Y', avgY + (list.length ? ' \u00B5m' : '')],
+        ['Wafer', activeMapWafer]
+      ]);
+    }
+  });
+}
+
+function updateMapStats() {
+  const s = waferStats(activeMapWafer);
+  document.getElementById('mapStats').innerHTML = `
+    <div class="stat-row"><span class="stat-label">Wafer</span><span class="stat-value">${activeMapWafer}</span></div>
+    <div class="stat-row"><span class="stat-label">Total Defects</span><span class="stat-value">${s.total}</span></div>
+    <div class="stat-row"><span class="stat-label">Dies Affected</span><span class="stat-value">${s.diesAffected}</span></div>
+    <div class="stat-row"><span class="stat-label">Bump PMI</span><span class="stat-value" style="color:#60a5fa">${s.r1}</span></div>
+    <div class="stat-row"><span class="stat-label">Surface</span><span class="stat-value" style="color:#a78bfa">${s.r2}</span></div>
+    <div class="stat-row"><span class="stat-label">Hotspot Die</span><span class="stat-value" style="color:#e74c3c">(${s.maxDie}) &times;${s.maxCount}</span></div>
+    <div class="stat-row"><span class="stat-label">Zones</span><span class="stat-value">${Object.entries(s.zones).map(([z,n])=>z+':'+n).join(', ')}</span></div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════
+   WAFER KPI CARDS — Option B
+   ═══════════════════════════════════════════════════ */
+function initKpiCards() {
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = waferIds.map(wid => {
+    const s = waferStats(wid);
+    const r1pct = Math.round(s.r1 / s.total * 100);
+    const r2pct = 100 - r1pct;
+    return `
+    <div class="kpi-card">
+      <div class="kpi-wafer-id">Wafer <span>${wid}</span></div>
+      <div class="kpi-lot">Lot: lot &bull; Job: MTK-AHJ11236 &bull; Setup: setup1</div>
+      <div class="kpi-big-num">${s.total}</div>
+      <div class="kpi-big-label">Total Defects</div>
+      <div class="kpi-metrics">
+        <div class="kpi-metric"><div class="m-val">${s.diesAffected}</div><div class="m-label">Dies Affected</div></div>
+        <div class="kpi-metric"><div class="m-val" style="color:#e74c3c">${s.maxCount}</div><div class="m-label">Max / Die</div></div>
+        <div class="kpi-metric"><div class="m-val">${Object.keys(s.zones).length}</div><div class="m-label">Zones Hit</div></div>
+        <div class="kpi-metric"><div class="m-val">${Math.round(s.diesAffected / (COLS * ROWS) * 100)}%</div><div class="m-label">Die Coverage</div></div>
+      </div>
+      <div class="recipe-bar">
+        <div class="seg" style="width:${r1pct}%;background:#3b82f6"></div>
+        <div class="seg" style="width:${r2pct}%;background:#8b5cf6"></div>
+      </div>
+      <div class="recipe-legend">
+        <span><span class="dot" style="background:#3b82f6"></span> x7.5 Bump PMI (${s.r1})</span>
+        <span><span class="dot" style="background:#8b5cf6"></span> x3.5 Surface (${s.r2})</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════
+   WAFER COMPARISON — Option C
+   ═══════════════════════════════════════════════════ */
+function addCompCanvasClick(canvasId, wid) {
+  const canvas = document.getElementById(canvasId);
+  const pad = 20;
+  const radius = (Math.min(canvas.width, canvas.height) - pad * 2) / 2;
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const cellW = (radius * 2) / COLS, cellH = (radius * 2) / ROWS;
+  const ox = cx - radius, oy = cy - radius;
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const col = Math.floor((mx - ox) / cellW);
+    const row = Math.floor((my - oy) / cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS && isOnWafer(col, row)) {
+      const dm = dieDefectMap(wid);
+      const k = dieKey(col, row);
+      const list = dm[k] || [];
+      const avgX = list.length ? Math.round(list.reduce((s, d) => s + d.wx, 0) / list.length) : '—';
+      const avgY = list.length ? Math.round(list.reduce((s, d) => s + d.wy, 0) / list.length) : '—';
+      showPosPopup(e.clientX, e.clientY, `Wafer ${wid} — Die (${col}, ${row})`, [
+        ['Die Col', col],
+        ['Die Row', row],
+        ['Defects', list.length],
+        ['Avg Wafer X', avgX + (list.length ? ' \u00B5m' : '')],
+        ['Avg Wafer Y', avgY + (list.length ? ' \u00B5m' : '')],
+      ]);
+    }
+  });
+}
+
+function initComparison() {
+  drawWaferMap('compCanvas1', '01');
+  drawWaferMap('compCanvas2', '02');
+  addCompCanvasClick('compCanvas1', '01');
+  addCompCanvasClick('compCanvas2', '02');
+  const s1 = waferStats('01'), s2 = waferStats('02');
+  const delta = s1.total - s2.total;
+  document.getElementById('compStats').innerHTML = `
+    <div class="comp-stat"><span class="c-label">Defect Delta</span><span class="c-val">${delta === 0 ? 'Identical' : (delta > 0 ? '+' : '') + delta}</span></div>
+    <div class="comp-stat"><span class="c-label">W01 Defects</span><span class="c-val">${s1.total}</span></div>
+    <div class="comp-stat"><span class="c-label">W02 Defects</span><span class="c-val">${s2.total}</span></div>
+    <div class="comp-stat"><span class="c-label">W01 Dies Hit</span><span class="c-val">${s1.diesAffected}</span></div>
+    <div class="comp-stat"><span class="c-label">W02 Dies Hit</span><span class="c-val">${s2.diesAffected}</span></div>
+    <div class="comp-stat"><span class="c-label">Hotspot Match</span><span class="c-val" style="color:#00d4aa">100%</span></div>
+    <div class="comp-stat"><span class="c-label">Pattern</span><span class="c-val">Edge-clustered</span></div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════
+   DIE GRID NAVIGATOR — Option A
+   ═══════════════════════════════════════════════════ */
+let activeDieGridWafer = '01';
+let selectedDieKey = null;
+
+function buildDieGrid() {
+  const dm = dieDefectMap(activeDieGridWafer);
+  let html = '<table class="die-grid"><thead><tr><th class="row-header"></th>';
+  for (let c = 0; c < COLS; c++) html += `<th>${c}</th>`;
+  html += '</tr></thead><tbody>';
+  for (let r = 0; r < ROWS; r++) {
+    html += `<tr><th class="row-header">${r}</th>`;
+    for (let c = 0; c < COLS; c++) {
+      const on = isOnWafer(c, r);
+      const k = dieKey(c, r);
+      const count = dm[k] ? dm[k].length : 0;
+      const cls = on ? 'die-cell valid' + (selectedDieKey === k ? ' selected' : '') : 'die-cell off-wafer';
+      const bg = on ? `background:${defectColor(count)}` : '';
+      html += `<td class="${cls}" style="${bg}" data-col="${c}" data-row="${r}" title="Die(${c},${r}): ${count} defects">${count > 0 ? count : ''}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('dieGridContainer').innerHTML = html;
+
+  document.getElementById('dieGridContainer').addEventListener('click', e => {
+    const cell = e.target.closest('.die-cell.valid');
+    if (!cell) return;
+    const c = +cell.dataset.col, r = +cell.dataset.row;
+    selectedDieKey = dieKey(c, r);
+    document.querySelectorAll('.die-cell.selected').forEach(el => el.classList.remove('selected'));
+    cell.classList.add('selected');
+    showDieGridDetail(c, r);
+
+    // Show position popup
+    const dm = dieDefectMap(activeDieGridWafer);
+    const k = dieKey(c, r);
+    const list = dm[k] || [];
+    const avgX = list.length ? Math.round(list.reduce((s, d) => s + d.wx, 0) / list.length) : '—';
+    const avgY = list.length ? Math.round(list.reduce((s, d) => s + d.wy, 0) / list.length) : '—';
+    showPosPopup(e.clientX, e.clientY, `Die (${c}, ${r})`, [
+      ['Die Col', c],
+      ['Die Row', r],
+      ['Defects', list.length],
+      ['Avg Wafer X', avgX + (list.length ? ' \u00B5m' : '')],
+      ['Avg Wafer Y', avgY + (list.length ? ' \u00B5m' : '')],
+      ['Wafer', activeDieGridWafer]
+    ]);
+  });
+}
+
+function showDieGridDetail(col, row) {
+  const dm = dieDefectMap(activeDieGridWafer);
+  const k = dieKey(col, row);
+  const list = dm[k] || [];
+  const el = document.getElementById('dieGridDetail');
+  if (list.length === 0) {
+    el.innerHTML = `<div class="die-detail-header"><span class="die-pos">Die (${col}, ${row})</span></div><div class="die-detail-empty">No defects in this die</div>`;
+    return;
+  }
+  let html = `<div class="die-detail-header">
+    <span class="die-pos">Die (${col}, ${row})</span>
+    <span class="die-count-badge">${list.length} defect${list.length > 1 ? 's' : ''}</span>
+  </div>
+  <table class="defect-table"><thead><tr><th>#</th><th>Recipe</th><th>Class</th><th>Wafer X</th><th>Wafer Y</th><th>Zone</th></tr></thead><tbody>`;
+  list.forEach((d, i) => {
+    html += `<tr style="cursor:pointer" class="grid-defect-row" data-idx="${i}"><td>${i + 1}</td><td>${d.recipeName}</td><td>${d.oclass}</td><td>${Math.round(d.wx)}</td><td>${Math.round(d.wy)}</td><td>${d.zone}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+
+  // Click on rows → show position popup
+  el.querySelectorAll('.grid-defect-row').forEach(tr => {
+    tr.addEventListener('click', e => {
+      const idx = +tr.dataset.idx;
+      const d = list[idx];
+      showPosPopup(e.clientX, e.clientY, `Defect #${idx + 1}`, [
+        ['Die', `(${col}, ${row})`],
+        ['Wafer X', Math.round(d.wx) + ' \u00B5m'],
+        ['Wafer Y', Math.round(d.wy) + ' \u00B5m'],
+        ['Recipe', d.recipeName],
+        ['Class', d.oclass],
+        ['Zone', d.zone],
+        ['Wafer', activeDieGridWafer]
+      ]);
+    });
+  });
+}
+
+function initDieGrid() {
+  const tabsEl = document.getElementById('dieGridTabs');
+  tabsEl.innerHTML = waferIds.map(w =>
+    `<button class="wafer-tab${w === activeDieGridWafer ? ' active' : ''}" data-w="${w}">Wafer ${w}</button>`
+  ).join('');
+  tabsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.wafer-tab');
+    if (!btn) return;
+    activeDieGridWafer = btn.dataset.w;
+    tabsEl.querySelectorAll('.wafer-tab').forEach(b => b.classList.toggle('active', b === btn));
+    selectedDieKey = null;
+    buildDieGrid();
+    document.getElementById('dieGridDetail').innerHTML = '<div class="die-detail-empty">Click a die cell to view defect details</div>';
+  });
+  buildDieGrid();
+}
+
+/* ═══════════════════════════════════════════════════
+   DIE DETAIL PANEL — Option B
+   ═══════════════════════════════════════════════════ */
+let activeDetailWafer = '01';
+
+function initDieDetail() {
+  const tabsEl = document.getElementById('dieDetailTabs');
+  tabsEl.innerHTML = waferIds.map(w =>
+    `<button class="wafer-tab${w === activeDetailWafer ? ' active' : ''}" data-w="${w}">Wafer ${w}</button>`
+  ).join('');
+  tabsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.wafer-tab');
+    if (!btn) return;
+    activeDetailWafer = btn.dataset.w;
+    tabsEl.querySelectorAll('.wafer-tab').forEach(b => b.classList.toggle('active', b === btn));
+    populateDieSelect();
+  });
+  populateDieSelect();
+
+  document.getElementById('dieSelect').addEventListener('change', e => {
+    renderDieDetail(e.target.value);
+  });
+}
+
+function populateDieSelect() {
+  const dm = dieDefectMap(activeDetailWafer);
+  const sorted = Object.entries(dm).sort((a, b) => b[1].length - a[1].length);
+  const sel = document.getElementById('dieSelect');
+  sel.innerHTML = '<option value="">— select die —</option>' +
+    sorted.map(([k, list]) => `<option value="${k}">Die (${k}) — ${list.length} defects</option>`).join('');
+  document.getElementById('dieDetailPanel').innerHTML = '<div class="die-detail-empty">Select a die from the dropdown to view full details</div>';
+}
+
+function renderDieDetail(key) {
+  const panel = document.getElementById('dieDetailPanel');
+  if (!key) { panel.innerHTML = '<div class="die-detail-empty">Select a die from the dropdown</div>'; return; }
+  const dm = dieDefectMap(activeDetailWafer);
+  const list = dm[key] || [];
+  const [col, row] = key.split(',').map(Number);
+
+  let html = `<div class="die-detail-header">
+    <span class="die-pos">Die (${col}, ${row})</span>
+    <span class="die-count-badge">${list.length} defect${list.length > 1 ? 's' : ''}</span>
+    <span style="color:#5a7a9a;font-size:12px;margin-left:auto">Wafer ${activeDetailWafer}</span>
+  </div>
+  <table class="defect-table"><thead><tr><th>#</th><th>Recipe</th><th>Class</th><th>Wafer X</th><th>Wafer Y</th><th>Zone</th><th>Image</th></tr></thead><tbody>`;
+  list.forEach((d, i) => {
+    const imgShort = d.image.split('/').pop().substring(0, 20) + '...';
+    html += `<tr style="cursor:pointer" data-idx="${i}" class="defect-row"><td>${i + 1}</td><td>${d.recipeName}</td><td>${d.oclass}</td><td>${Math.round(d.wx)}</td><td>${Math.round(d.wy)}</td><td>${d.zone}</td><td style="color:#3a7abf;font-size:11px">${imgShort}</td></tr>`;
+  });
+  html += '</tbody></table>';
+
+  // After render, add click handlers on rows
+  setTimeout(() => {
+    document.querySelectorAll('#dieDetailPanel .defect-row').forEach(tr => {
+      tr.addEventListener('click', e => {
+        const idx = +tr.dataset.idx;
+        const d = list[idx];
+        showPosPopup(e.clientX, e.clientY, `Defect #${idx + 1}`, [
+          ['Die', `(${col}, ${row})`],
+          ['Wafer X', Math.round(d.wx) + ' \u00B5m'],
+          ['Wafer Y', Math.round(d.wy) + ' \u00B5m'],
+          ['Recipe', d.recipeName],
+          ['Class', d.oclass],
+          ['Zone', d.zone],
+          ['Wafer', activeDetailWafer]
+        ]);
+      });
+    });
+  }, 0);
+
+  // Scatter plot
+  if (list.length > 1) {
+    html += `<div class="die-scatter-box">
+      <div class="die-scatter-title">Defect positions in die (Wafer X vs Y)</div>
+      <canvas id="scatterCanvas" width="300" height="200"></canvas>
+    </div>`;
+  }
+
+  panel.innerHTML = html;
+
+  // Draw scatter
+  if (list.length > 1) {
+    const sc = document.getElementById('scatterCanvas');
+    const sctx = sc.getContext('2d');
+    const sw = sc.width, sh = sc.height;
+    const pad = 30;
+    const xs = list.map(d => d.wx), ys = list.map(d => d.wy);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
+
+    // Grid lines
+    sctx.strokeStyle = '#1a2e4a';
+    sctx.lineWidth = 0.5;
+    for (let i = 0; i <= 4; i++) {
+      const gx = pad + (sw - pad * 2) * i / 4;
+      sctx.beginPath(); sctx.moveTo(gx, pad); sctx.lineTo(gx, sh - pad); sctx.stroke();
+      const gy = pad + (sh - pad * 2) * i / 4;
+      sctx.beginPath(); sctx.moveTo(pad, gy); sctx.lineTo(sw - pad, gy); sctx.stroke();
+    }
+
+    // Points
+    list.forEach(d => {
+      const px = pad + ((d.wx - minX) / rangeX) * (sw - pad * 2);
+      const py = sh - pad - ((d.wy - minY) / rangeY) * (sh - pad * 2);
+      sctx.beginPath();
+      sctx.arc(px, py, 5, 0, Math.PI * 2);
+      sctx.fillStyle = d.recipe === 1 ? '#60a5fa' : '#a78bfa';
+      sctx.fill();
+      sctx.strokeStyle = '#fff';
+      sctx.lineWidth = 1;
+      sctx.stroke();
+    });
+
+    // Axis labels
+    sctx.fillStyle = '#5a7a9a';
+    sctx.font = '9px Segoe UI';
+    sctx.textAlign = 'center';
+    sctx.fillText(Math.round(minX), pad, sh - pad + 12);
+    sctx.fillText(Math.round(maxX), sw - pad, sh - pad + 12);
+    sctx.textAlign = 'right';
+    sctx.fillText(Math.round(minY), pad - 4, sh - pad);
+    sctx.fillText(Math.round(maxY), pad - 4, pad + 4);
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   DIE SUMMARY CARDS — Option C
+   ═══════════════════════════════════════════════════ */
+let activeDieCardsWafer = '01';
+
+function initDieCards() {
+  const tabsEl = document.getElementById('dieCardsTabs');
+  tabsEl.innerHTML = waferIds.map(w =>
+    `<button class="wafer-tab${w === activeDieCardsWafer ? ' active' : ''}" data-w="${w}">Wafer ${w}</button>`
+  ).join('');
+  tabsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.wafer-tab');
+    if (!btn) return;
+    activeDieCardsWafer = btn.dataset.w;
+    tabsEl.querySelectorAll('.wafer-tab').forEach(b => b.classList.toggle('active', b === btn));
+    renderDieCards();
+  });
+  renderDieCards();
+}
+
+function renderDieCards() {
+  const dm = dieDefectMap(activeDieCardsWafer);
+  const sorted = Object.entries(dm).sort((a, b) => b[1].length - a[1].length);
+  const scroll = document.getElementById('dieCardsScroll');
+  scroll.innerHTML = sorted.map(([k, list]) => {
+    const count = list.length;
+    const sev = count >= 4 ? 'high' : count >= 2 ? 'med' : 'low';
+    const recipes = [...new Set(list.map(d => d.recipeName))];
+    const zones = [...new Set(list.map(d => d.zone))];
+    return `<div class="die-card ${sev}" data-key="${k}">
+      <div class="die-card-pos">Die (${k})</div>
+      <div class="die-card-count ${sev}">${count}</div>
+      <div class="die-card-label">defect${count > 1 ? 's' : ''}</div>
+      <div class="die-card-tags">
+        ${recipes.map(r => `<span class="die-card-tag ${r.includes('Bump') ? 'r1' : 'r2'}">${r.includes('Bump') ? 'Bump' : 'Surface'}</span>`).join('')}
+        ${zones.map(z => `<span class="die-card-tag">Z${z}</span>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Click on cards → show position popup
+  scroll.querySelectorAll('.die-card').forEach(card => {
+    card.addEventListener('click', e => {
+      const k = card.dataset.key;
+      const [col, row] = k.split(',').map(Number);
+      const list = dm[k] || [];
+      const avgX = list.length ? Math.round(list.reduce((s, d) => s + d.wx, 0) / list.length) : '—';
+      const avgY = list.length ? Math.round(list.reduce((s, d) => s + d.wy, 0) / list.length) : '—';
+      const xRange = list.length > 1 ? `${Math.round(Math.min(...list.map(d=>d.wx)))} — ${Math.round(Math.max(...list.map(d=>d.wx)))}` : '';
+      const yRange = list.length > 1 ? `${Math.round(Math.min(...list.map(d=>d.wy)))} — ${Math.round(Math.max(...list.map(d=>d.wy)))}` : '';
+      const rows = [
+        ['Die Col', col],
+        ['Die Row', row],
+        ['Defects', list.length],
+        ['Avg Wafer X', avgX + ' \u00B5m'],
+        ['Avg Wafer Y', avgY + ' \u00B5m'],
+      ];
+      if (xRange) rows.push(['X Range', xRange]);
+      if (yRange) rows.push(['Y Range', yRange]);
+      rows.push(['Wafer', activeDieCardsWafer]);
+      showPosPopup(e.clientX, e.clientY, `Die (${col}, ${row})`, rows);
+    });
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   DIE MAP — Option D (Canvas, rectangular grid)
+   Like the wafer map but as a clean rectangle.
+   ═══════════════════════════════════════════════════ */
+let activeDieMapWafer = '01';
+let dieMapMeta = null;
+
+function drawDieMap(canvasId, wid) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const pad = 28;
+  const gridW = w - pad * 2, gridH = h - pad * 2;
+  const cellW = gridW / COLS, cellH = gridH / ROWS;
+  const dm = dieDefectMap(wid);
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  ctx.fillStyle = '#0a1425';
+  ctx.fillRect(0, 0, w, h);
+
+  // Draw die cells
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      const x = pad + c * cellW;
+      const y = pad + r * cellH;
+      const k = dieKey(c, r);
+      const count = dm[k] ? dm[k].length : 0;
+      const onW = isOnWafer(c, r);
+
+      // Cell fill
+      if (onW) {
+        ctx.fillStyle = defectColor(count);
+      } else {
+        ctx.fillStyle = '#080e1a';
+      }
+      ctx.fillRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
+
+      // Defect count text
+      if (count > 0 && onW) {
+        ctx.fillStyle = count >= 4 ? '#fff' : '#c0d0e0';
+        ctx.font = `bold ${Math.max(9, cellW * 0.42)}px Segoe UI`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(count, x + cellW / 2, y + cellH / 2);
+      }
+    }
+  }
+
+  // Grid lines (subtle)
+  ctx.strokeStyle = '#1a2e4a33';
+  ctx.lineWidth = 0.5;
+  for (let c = 0; c <= COLS; c++) {
+    ctx.beginPath();
+    ctx.moveTo(pad + c * cellW, pad);
+    ctx.lineTo(pad + c * cellW, pad + gridH);
+    ctx.stroke();
+  }
+  for (let r = 0; r <= ROWS; r++) {
+    ctx.beginPath();
+    ctx.moveTo(pad, pad + r * cellH);
+    ctx.lineTo(pad + gridW, pad + r * cellH);
+    ctx.stroke();
+  }
+
+  // Col headers
+  ctx.fillStyle = '#3a5a7a';
+  ctx.font = '9px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  for (let c = 0; c < COLS; c++) {
+    ctx.fillText(c, pad + c * cellW + cellW / 2, pad - 4);
+  }
+  // Row headers
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let r = 0; r < ROWS; r++) {
+    ctx.fillText(r, pad - 5, pad + r * cellH + cellH / 2);
+  }
+
+  // Title
+  ctx.fillStyle = '#5a7a9a';
+  ctx.font = '11px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('Wafer ' + wid + ' — Die Map (' + COLS + '×' + ROWS + ')', w / 2, h - 6);
+
+  return { pad, cellW, cellH, dm };
+}
+
+function initDieMap() {
+  const tabsEl = document.getElementById('dieMapTabs');
+  tabsEl.innerHTML = waferIds.map(w =>
+    `<button class="wafer-tab${w === activeDieMapWafer ? ' active' : ''}" data-w="${w}">Wafer ${w}</button>`
+  ).join('');
+  tabsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.wafer-tab');
+    if (!btn) return;
+    activeDieMapWafer = btn.dataset.w;
+    tabsEl.querySelectorAll('.wafer-tab').forEach(b => b.classList.toggle('active', b === btn));
+    dieMapMeta = drawDieMap('dieMapCanvas', activeDieMapWafer);
+    updateDieMapStats();
+  });
+
+  dieMapMeta = drawDieMap('dieMapCanvas', activeDieMapWafer);
+  updateDieMapStats();
+
+  // Tooltip
+  const canvas = document.getElementById('dieMapCanvas');
+  const tip = document.getElementById('dieMapTooltip');
+  canvas.addEventListener('mousemove', e => {
+    if (!dieMapMeta) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const col = Math.floor((mx - dieMapMeta.pad) / dieMapMeta.cellW);
+    const row = Math.floor((my - dieMapMeta.pad) / dieMapMeta.cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+      const k = dieKey(col, row);
+      const count = dieMapMeta.dm[k] ? dieMapMeta.dm[k].length : 0;
+      const onW = isOnWafer(col, row);
+      tip.innerHTML = `<b>Die (${col}, ${row})</b><br>Defects: ${count}${!onW ? '<br><i style="color:#3a5a7a">Off-wafer</i>' : ''}`;
+      tip.style.left = (e.clientX - canvas.getBoundingClientRect().left + 14) + 'px';
+      tip.style.top = (e.clientY - canvas.getBoundingClientRect().top - 10) + 'px';
+      tip.classList.add('visible');
+    } else {
+      tip.classList.remove('visible');
+    }
+  });
+  canvas.addEventListener('mouseleave', () => tip.classList.remove('visible'));
+
+  // Click → position popup
+  canvas.addEventListener('click', e => {
+    if (!dieMapMeta) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const col = Math.floor((mx - dieMapMeta.pad) / dieMapMeta.cellW);
+    const row = Math.floor((my - dieMapMeta.pad) / dieMapMeta.cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+      const k = dieKey(col, row);
+      const list = dieMapMeta.dm[k] || [];
+      const avgX = list.length ? Math.round(list.reduce((s, d) => s + d.wx, 0) / list.length) : '—';
+      const avgY = list.length ? Math.round(list.reduce((s, d) => s + d.wy, 0) / list.length) : '—';
+      showPosPopup(e.clientX, e.clientY, `Die (${col}, ${row})`, [
+        ['Die Col', col],
+        ['Die Row', row],
+        ['On Wafer', isOnWafer(col, row) ? 'Yes' : 'No'],
+        ['Defects', list.length],
+        ['Avg Wafer X', avgX + (list.length ? ' µm' : '')],
+        ['Avg Wafer Y', avgY + (list.length ? ' µm' : '')],
+        ['Wafer', activeDieMapWafer]
+      ]);
+    }
+  });
+}
+
+function updateDieMapStats() {
+  const s = waferStats(activeDieMapWafer);
+  const totalDies = (() => { let n = 0; for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) if (isOnWafer(c, r)) n++; return n; })();
+  document.getElementById('dieMapStats').innerHTML = `
+    <div class="stat-row"><span class="stat-label">Wafer</span><span class="stat-value">${activeDieMapWafer}</span></div>
+    <div class="stat-row"><span class="stat-label">Grid</span><span class="stat-value">${COLS} × ${ROWS}</span></div>
+    <div class="stat-row"><span class="stat-label">Valid Dies</span><span class="stat-value">${totalDies}</span></div>
+    <div class="stat-row"><span class="stat-label">Dies w/ Defects</span><span class="stat-value" style="color:#e74c3c">${s.diesAffected}</span></div>
+    <div class="stat-row"><span class="stat-label">Total Defects</span><span class="stat-value">${s.total}</span></div>
+    <div class="stat-row"><span class="stat-label">Hotspot Die</span><span class="stat-value" style="color:#e74c3c">(${s.maxDie}) ×${s.maxCount}</span></div>
+    <div class="stat-row"><span class="stat-label">Coverage</span><span class="stat-value">${Math.round(s.diesAffected / totalDies * 100)}%</span></div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════
+   DIE INTERIOR MAP — Option E
+   Zoomed view inside a single die with defect dots.
+   ═══════════════════════════════════════════════════ */
+let activeDieInteriorWafer = '01';
+
+function initDieInterior() {
+  const tabsEl = document.getElementById('dieInteriorTabs');
+  tabsEl.innerHTML = waferIds.map(w =>
+    `<button class="wafer-tab${w === activeDieInteriorWafer ? ' active' : ''}" data-w="${w}">Wafer ${w}</button>`
+  ).join('');
+  tabsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.wafer-tab');
+    if (!btn) return;
+    activeDieInteriorWafer = btn.dataset.w;
+    tabsEl.querySelectorAll('.wafer-tab').forEach(b => b.classList.toggle('active', b === btn));
+    populateDieInteriorSelect();
+  });
+  populateDieInteriorSelect();
+
+  document.getElementById('dieInteriorSelect').addEventListener('change', e => {
+    drawDieInterior(e.target.value);
+  });
+}
+
+function populateDieInteriorSelect() {
+  const dm = dieDefectMap(activeDieInteriorWafer);
+  const sorted = Object.entries(dm).sort((a, b) => b[1].length - a[1].length);
+  const sel = document.getElementById('dieInteriorSelect');
+  sel.innerHTML = '<option value="">— select die —</option>' +
+    sorted.map(([k, list]) => `<option value="${k}">Die (${k}) — ${list.length} defects</option>`).join('');
+  // Clear canvas
+  const ctx = document.getElementById('dieInteriorCanvas').getContext('2d');
+  ctx.clearRect(0, 0, 500, 400);
+  ctx.fillStyle = '#0a1425';
+  ctx.fillRect(0, 0, 500, 400);
+  ctx.fillStyle = '#3a5a7a';
+  ctx.font = '13px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('Select a die to view its interior defect map', 250, 200);
+  document.getElementById('dieInteriorInfo').innerHTML = '';
+}
+
+function drawDieInterior(key) {
+  const canvas = document.getElementById('dieInteriorCanvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const pad = 50;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0a1425';
+  ctx.fillRect(0, 0, w, h);
+
+  if (!key) {
+    ctx.fillStyle = '#3a5a7a';
+    ctx.font = '13px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('Select a die to view its interior defect map', w / 2, h / 2);
+    document.getElementById('dieInteriorInfo').innerHTML = '';
+    return;
+  }
+
+  const dm = dieDefectMap(activeDieInteriorWafer);
+  const list = dm[key] || [];
+  const [col, row] = key.split(',').map(Number);
+
+  if (list.length === 0) {
+    ctx.fillStyle = '#3a5a7a';
+    ctx.font = '13px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('No defects in this die', w / 2, h / 2);
+    return;
+  }
+
+  const xs = list.map(d => d.wx), ys = list.map(d => d.wy);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  // Add 10% margin around data
+  const spanX = (maxX - minX) || 1000;
+  const spanY = (maxY - minY) || 1000;
+  const mx0 = minX - spanX * 0.15, mx1 = maxX + spanX * 0.15;
+  const my0 = minY - spanY * 0.15, my1 = maxY + spanY * 0.15;
+  const rngX = mx1 - mx0, rngY = my1 - my0;
+
+  const plotW = w - pad * 2, plotH = h - pad * 2;
+
+  // Die boundary rectangle
+  ctx.strokeStyle = '#1e3a5f';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(pad, pad, plotW, plotH);
+
+  // Grid lines
+  ctx.strokeStyle = '#111e3388';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 6; i++) {
+    const gx = pad + plotW * i / 6;
+    ctx.beginPath(); ctx.moveTo(gx, pad); ctx.lineTo(gx, pad + plotH); ctx.stroke();
+    const gy = pad + plotH * i / 6;
+    ctx.beginPath(); ctx.moveTo(pad, gy); ctx.lineTo(pad + plotW, gy); ctx.stroke();
+  }
+
+  // Crosshair at center
+  ctx.strokeStyle = '#1e3a5f55';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(w / 2, pad); ctx.lineTo(w / 2, pad + plotH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad, h / 2); ctx.lineTo(pad + plotW, h / 2); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Plot defect dots
+  const dotRadius = Math.max(6, Math.min(14, 200 / list.length));
+  const dotMeta = []; // for click detection
+
+  list.forEach((d, i) => {
+    const px = pad + ((d.wx - mx0) / rngX) * plotW;
+    const py = pad + plotH - ((d.wy - my0) / rngY) * plotH;
+
+    // Glow
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, dotRadius * 2.5);
+    const baseColor = d.recipe === 1 ? '96,165,250' : '167,139,250';
+    grad.addColorStop(0, `rgba(${baseColor},0.25)`);
+    grad.addColorStop(1, `rgba(${baseColor},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(px, py, dotRadius * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Dot
+    ctx.beginPath();
+    ctx.arc(px, py, dotRadius, 0, Math.PI * 2);
+    ctx.fillStyle = d.recipe === 1 ? '#3b82f6' : '#8b5cf6';
+    ctx.fill();
+    ctx.strokeStyle = '#e0eaf4';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Index label
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.max(8, dotRadius * 0.85)}px Segoe UI`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, px, py);
+
+    dotMeta.push({ x: px, y: py, r: dotRadius, d, i });
+  });
+
+  // Axis labels
+  ctx.fillStyle = '#5a7a9a';
+  ctx.font = '10px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${Math.round(mx0)} µm`, pad, pad + plotH + 6);
+  ctx.fillText(`${Math.round(mx1)} µm`, pad + plotW, pad + plotH + 6);
+  ctx.fillText('Wafer X →', w / 2, pad + plotH + 20);
+
+  ctx.save();
+  ctx.translate(14, h / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillText('Wafer Y →', 0, 0);
+  ctx.restore();
+
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${Math.round(my0)}`, pad - 6, pad + plotH);
+  ctx.fillText(`${Math.round(my1)}`, pad - 6, pad);
+
+  // Title
+  ctx.fillStyle = '#e0eaf4';
+  ctx.font = 'bold 13px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(`Die (${col}, ${row}) — ${list.length} Defect${list.length > 1 ? 's' : ''}`, w / 2, pad - 10);
+
+  // Legend
+  ctx.font = '10px Segoe UI';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#3b82f6';
+  ctx.beginPath(); ctx.arc(pad + 10, pad - 26, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7a9ab5';
+  ctx.fillText('Bump PMI', pad + 20, pad - 23);
+  ctx.fillStyle = '#8b5cf6';
+  ctx.beginPath(); ctx.arc(pad + 100, pad - 26, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7a9ab5';
+  ctx.fillText('Surface', pad + 110, pad - 23);
+
+  // Info panel
+  const recipes = {};
+  const classes = {};
+  list.forEach(d => {
+    recipes[d.recipeName] = (recipes[d.recipeName] || 0) + 1;
+    classes[d.oclass] = (classes[d.oclass] || 0) + 1;
+  });
+
+  document.getElementById('dieInteriorInfo').innerHTML = `
+    <div class="di-row"><span class="di-label">Die Position</span><span class="di-val">(${col}, ${row})</span></div>
+    <div class="di-row"><span class="di-label">Wafer</span><span class="di-val">${activeDieInteriorWafer}</span></div>
+    <div class="di-row"><span class="di-label">Defects</span><span class="di-val">${list.length}</span></div>
+    <div class="di-row"><span class="di-label">X Range</span><span class="di-val">${Math.round(minX)} — ${Math.round(maxX)}</span></div>
+    <div class="di-row"><span class="di-label">Y Range</span><span class="di-val">${Math.round(minY)} — ${Math.round(maxY)}</span></div>
+    <div class="di-row"><span class="di-label">X Span</span><span class="di-val">${Math.round(spanX)} µm</span></div>
+    <div class="di-row"><span class="di-label">Y Span</span><span class="di-val">${Math.round(spanY)} µm</span></div>
+    <div class="di-row"><span class="di-label">Recipes</span><span class="di-val">${Object.entries(recipes).map(([r,n])=>`${r}: ${n}`).join('<br>')}</span></div>
+    <div class="di-row"><span class="di-label">Classes</span><span class="di-val">${Object.entries(classes).map(([c,n])=>`OClass ${c}: ${n}`).join(', ')}</span></div>
+  `;
+
+  // Tooltip on hover
+  const tip = document.getElementById('dieInteriorTooltip');
+  canvas.onmousemove = e => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const hit = dotMeta.find(dm => Math.hypot(cx - dm.x, cy - dm.y) <= dm.r + 3);
+    if (hit) {
+      tip.innerHTML = `<b>Defect #${hit.i + 1}</b><br>X: ${Math.round(hit.d.wx)} µm<br>Y: ${Math.round(hit.d.wy)} µm<br>Class: ${hit.d.oclass} | Zone: ${hit.d.zone}`;
+      tip.style.left = (e.clientX - rect.left + 14) + 'px';
+      tip.style.top = (e.clientY - rect.top - 10) + 'px';
+      tip.classList.add('visible');
+      canvas.style.cursor = 'pointer';
+    } else {
+      tip.classList.remove('visible');
+      canvas.style.cursor = 'crosshair';
+    }
+  };
+  canvas.onmouseleave = () => tip.classList.remove('visible');
+
+  // Click on defect dot → position popup
+  canvas.onclick = e => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const hit = dotMeta.find(dm => Math.hypot(cx - dm.x, cy - dm.y) <= dm.r + 3);
+    if (hit) {
+      showPosPopup(e.clientX, e.clientY, `Defect #${hit.i + 1}`, [
+        ['Die', `(${col}, ${row})`],
+        ['Wafer X', Math.round(hit.d.wx) + ' µm'],
+        ['Wafer Y', Math.round(hit.d.wy) + ' µm'],
+        ['Recipe', hit.d.recipeName],
+        ['Class', hit.d.oclass],
+        ['Zone', hit.d.zone],
+        ['Wafer', activeDieInteriorWafer]
+      ]);
+    }
+  };
+}
+
+/* ═══════════════════════════════════════════════════
+   DIE BIN MAP — Option F
+   Dies colored by their dominant OClass (bin).
+   ═══════════════════════════════════════════════════ */
+let activeDieBinWafer = '01';
+
+const BIN_COLORS = {
+  1:  '#2d8f5f', // green — most common class
+  30: '#e67e22', // orange
+  34: '#e74c3c', // red
+  0:  '#141f30'  // no defects
+};
+const BIN_LABELS = { 1: 'Class 1 (General)', 30: 'Class 30', 34: 'Class 34' };
+
+function getBinColor(oclass) {
+  return BIN_COLORS[oclass] || '#3b82f6';
+}
+
+function drawDieBinMap(canvasId, wid) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const pad = 28;
+  const gridW = w - pad * 2, gridH = h - pad * 2;
+  const cellW = gridW / COLS, cellH = gridH / ROWS;
+  const dm = dieDefectMap(wid);
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#0a1425';
+  ctx.fillRect(0, 0, w, h);
+
+  const classCounts = {};
+
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < ROWS; r++) {
+      const x = pad + c * cellW;
+      const y = pad + r * cellH;
+      const k = dieKey(c, r);
+      const onW = isOnWafer(c, r);
+      const list = dm[k] || [];
+
+      if (!onW) {
+        ctx.fillStyle = '#080e1a';
+      } else if (list.length === 0) {
+        ctx.fillStyle = '#141f30';
+      } else {
+        // Dominant class for this die
+        const cc = {};
+        list.forEach(d => { cc[d.oclass] = (cc[d.oclass] || 0) + 1; });
+        const dominant = +Object.entries(cc).sort((a, b) => b[1] - a[1])[0][0];
+        ctx.fillStyle = getBinColor(dominant);
+        classCounts[dominant] = (classCounts[dominant] || 0) + 1;
+      }
+      ctx.fillRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
+
+      if (list.length > 0 && onW) {
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${Math.max(9, cellW * 0.42)}px Segoe UI`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(list.length, x + cellW / 2, y + cellH / 2);
+      }
+    }
+  }
+
+  // Col headers
+  ctx.fillStyle = '#3a5a7a';
+  ctx.font = '9px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  for (let c = 0; c < COLS; c++) ctx.fillText(c, pad + c * cellW + cellW / 2, pad - 4);
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (let r = 0; r < ROWS; r++) ctx.fillText(r, pad - 5, pad + r * cellH + cellH / 2);
+
+  ctx.fillStyle = '#5a7a9a';
+  ctx.font = '11px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('Wafer ' + wid + ' — Die Bin Map (by OClass)', w / 2, h - 6);
+
+  return { pad, cellW, cellH, dm, classCounts };
+}
+
+let dieBinMeta = null;
+
+function initDieBin() {
+  const tabsEl = document.getElementById('dieBinTabs');
+  tabsEl.innerHTML = waferIds.map(w =>
+    `<button class="wafer-tab${w === activeDieBinWafer ? ' active' : ''}" data-w="${w}">Wafer ${w}</button>`
+  ).join('');
+  tabsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.wafer-tab');
+    if (!btn) return;
+    activeDieBinWafer = btn.dataset.w;
+    tabsEl.querySelectorAll('.wafer-tab').forEach(b => b.classList.toggle('active', b === btn));
+    dieBinMeta = drawDieBinMap('dieBinCanvas', activeDieBinWafer);
+    updateDieBinUI();
+  });
+
+  dieBinMeta = drawDieBinMap('dieBinCanvas', activeDieBinWafer);
+  updateDieBinUI();
+
+  // Tooltip
+  const canvas = document.getElementById('dieBinCanvas');
+  const tip = document.getElementById('dieBinTooltip');
+  canvas.addEventListener('mousemove', e => {
+    if (!dieBinMeta) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const col = Math.floor((mx - dieBinMeta.pad) / dieBinMeta.cellW);
+    const row = Math.floor((my - dieBinMeta.pad) / dieBinMeta.cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+      const k = dieKey(col, row);
+      const list = dieBinMeta.dm[k] || [];
+      const classes = [...new Set(list.map(d => d.oclass))];
+      tip.innerHTML = `<b>Die (${col}, ${row})</b><br>Defects: ${list.length}${list.length ? '<br>Classes: ' + classes.join(', ') : ''}`;
+      tip.style.left = (e.clientX - canvas.getBoundingClientRect().left + 14) + 'px';
+      tip.style.top = (e.clientY - canvas.getBoundingClientRect().top - 10) + 'px';
+      tip.classList.add('visible');
+    } else {
+      tip.classList.remove('visible');
+    }
+  });
+  canvas.addEventListener('mouseleave', () => tip.classList.remove('visible'));
+
+  // Click → position popup
+  canvas.addEventListener('click', e => {
+    if (!dieBinMeta) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const col = Math.floor((mx - dieBinMeta.pad) / dieBinMeta.cellW);
+    const row = Math.floor((my - dieBinMeta.pad) / dieBinMeta.cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS) {
+      const k = dieKey(col, row);
+      const list = dieBinMeta.dm[k] || [];
+      const classes = {};
+      list.forEach(d => { classes[d.oclass] = (classes[d.oclass] || 0) + 1; });
+      const avgX = list.length ? Math.round(list.reduce((s, d) => s + d.wx, 0) / list.length) : '—';
+      const avgY = list.length ? Math.round(list.reduce((s, d) => s + d.wy, 0) / list.length) : '—';
+      const rows = [
+        ['Die Col', col],
+        ['Die Row', row],
+        ['Defects', list.length],
+        ['Classes', Object.entries(classes).map(([c, n]) => `OClass ${c}: ${n}`).join(', ') || '—'],
+        ['Avg Wafer X', avgX + (list.length ? ' µm' : '')],
+        ['Avg Wafer Y', avgY + (list.length ? ' µm' : '')],
+        ['Wafer', activeDieBinWafer]
+      ];
+      showPosPopup(e.clientX, e.clientY, `Die (${col}, ${row})`, rows);
+    }
+  });
+}
+
+function updateDieBinUI() {
+  // Legend
+  const allClasses = {};
+  byWafer(activeDieBinWafer).forEach(d => { allClasses[d.oclass] = (allClasses[d.oclass] || 0) + 1; });
+  document.getElementById('dieBinLegend').innerHTML =
+    `<div class="bl-item"><span class="bl-swatch" style="background:#141f30"></span>No defects</div>` +
+    Object.entries(allClasses).sort((a,b) => b[1]-a[1]).map(([cls]) =>
+      `<div class="bl-item"><span class="bl-swatch" style="background:${getBinColor(+cls)}"></span>${BIN_LABELS[cls] || 'Class ' + cls} (${allClasses[cls]})</div>`
+    ).join('');
+
+  // Stats
+  const s = waferStats(activeDieBinWafer);
+  const dm = dieDefectMap(activeDieBinWafer);
+  const multiClassDies = Object.values(dm).filter(list => new Set(list.map(d => d.oclass)).size > 1).length;
+  document.getElementById('dieBinStats').innerHTML = `
+    <div class="stat-row"><span class="stat-label">Wafer</span><span class="stat-value">${activeDieBinWafer}</span></div>
+    <div class="stat-row"><span class="stat-label">Unique Classes</span><span class="stat-value">${Object.keys(allClasses).length}</span></div>
+    ${Object.entries(allClasses).sort((a,b)=>b[1]-a[1]).map(([cls, n]) =>
+      `<div class="stat-row"><span class="stat-label">OClass ${cls}</span><span class="stat-value" style="color:${getBinColor(+cls)}">${n} defects</span></div>`
+    ).join('')}
+    <div class="stat-row"><span class="stat-label">Mixed-Class Dies</span><span class="stat-value">${multiClassDies}</span></div>
+    <div class="stat-row"><span class="stat-label">Total Defects</span><span class="stat-value">${s.total}</span></div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════
+   COMBINED: WAFER → DIE DRILLDOWN
+   ═══════════════════════════════════════════════════ */
+let drillWafer = '01';
+let drillMeta = null;
+let drillSelectedDie = null;   // {col, row}
+
+function drillDrawWafer() {
+  drillMeta = drawWaferMap('drillWaferCanvas', drillWafer);
+  // Redraw highlight if a die is selected
+  if (drillSelectedDie) drillHighlightDie(drillSelectedDie.col, drillSelectedDie.row);
+}
+
+function drillHighlightDie(col, row) {
+  const ring = document.getElementById('drillSelRing');
+  const canvas = document.getElementById('drillWaferCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = rect.width / canvas.width;
+  const scaleY = rect.height / canvas.height;
+  const x = (drillMeta.ox + col * drillMeta.cellW) * scaleX;
+  const y = (drillMeta.oy + row * drillMeta.cellH) * scaleY;
+  const w = drillMeta.cellW * scaleX;
+  const h = drillMeta.cellH * scaleY;
+  ring.style.display = 'block';
+  ring.style.left = x + 'px';
+  ring.style.top = y + 'px';
+  ring.style.width = w + 'px';
+  ring.style.height = h + 'px';
+}
+
+function drillOpenDie(col, row) {
+  drillSelectedDie = { col, row };
+  drillHighlightDie(col, row);
+
+  const dm = dieDefectMap(drillWafer);
+  const k = dieKey(col, row);
+  const list = dm[k] || [];
+  const view = document.getElementById('drillDieView');
+
+  if (list.length === 0) {
+    view.innerHTML = `
+      <div class="drill-die-header">
+        <span class="dh-pos">Die (${col}, ${row})</span>
+        <span class="dh-badge">0 defects</span>
+        <button class="dh-back" id="drillBack">&#x2190; Back</button>
+      </div>
+      <div class="drill-empty">
+        <div class="de-icon" style="font-size:28px">&#10003;</div>
+        <div class="de-text">No defects found in this die</div>
+        <div class="de-hint">This die is clean</div>
+      </div>`;
+    document.getElementById('drillBack').addEventListener('click', drillReset);
+    return;
+  }
+
+  const xs = list.map(d => d.wx), ys = list.map(d => d.wy);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const spanX = (maxX - minX) || 1000, spanY = (maxY - minY) || 1000;
+  const recipes = {};
+  const classes = {};
+  list.forEach(d => {
+    recipes[d.recipeName] = (recipes[d.recipeName] || 0) + 1;
+    classes[d.oclass] = (classes[d.oclass] || 0) + 1;
+  });
+
+  view.innerHTML = `
+    <div class="drill-die-header">
+      <span class="dh-pos">Die (${col}, ${row})</span>
+      <span class="dh-badge">${list.length} defect${list.length > 1 ? 's' : ''}</span>
+      <button class="dh-back" id="drillBack">&#x2190; Back</button>
+    </div>
+    <div class="drill-info-grid">
+      <div class="drill-info-tile"><div class="dit-val">${Math.round(spanX)}</div><div class="dit-label">X Span (µm)</div></div>
+      <div class="drill-info-tile"><div class="dit-val">${Math.round(spanY)}</div><div class="dit-label">Y Span (µm)</div></div>
+      <div class="drill-info-tile"><div class="dit-val">${Object.keys(classes).length}</div><div class="dit-label">Classes</div></div>
+    </div>
+    <div class="drill-die-canvas-wrap" style="position:relative">
+      <canvas id="drillDieCanvas" width="480" height="300"></canvas>
+      <div class="map-tooltip" id="drillDieTooltip"></div>
+    </div>
+    <div class="drill-defect-table-wrap">
+      <table class="defect-table">
+        <thead><tr><th>#</th><th>Recipe</th><th>Class</th><th>Wafer X</th><th>Wafer Y</th><th>Zone</th></tr></thead>
+        <tbody>
+          ${list.map((d, i) => `<tr class="drill-row" data-idx="${i}" style="cursor:pointer">
+            <td>${i + 1}</td><td>${d.recipeName}</td><td>${d.oclass}</td>
+            <td>${Math.round(d.wx)}</td><td>${Math.round(d.wy)}</td><td>${d.zone}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('drillBack').addEventListener('click', drillReset);
+
+  // Draw interior scatter
+  const canvas = document.getElementById('drillDieCanvas');
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width, ch = canvas.height;
+  const pad = 44;
+  const plotW = cw - pad * 2, plotH = ch - pad * 2;
+  const mx0 = minX - spanX * 0.15, mx1 = maxX + spanX * 0.15;
+  const my0 = minY - spanY * 0.15, my1 = maxY + spanY * 0.15;
+  const rngX = mx1 - mx0, rngY = my1 - my0;
+
+  // Background
+  ctx.fillStyle = '#0a1425';
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Die boundary
+  ctx.strokeStyle = '#1e3a5f';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(pad, pad, plotW, plotH);
+
+  // Grid
+  ctx.strokeStyle = '#111e3866';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < 6; i++) {
+    const gx = pad + plotW * i / 6;
+    ctx.beginPath(); ctx.moveTo(gx, pad); ctx.lineTo(gx, pad + plotH); ctx.stroke();
+    const gy = pad + plotH * i / 6;
+    ctx.beginPath(); ctx.moveTo(pad, gy); ctx.lineTo(pad + plotW, gy); ctx.stroke();
+  }
+
+  // Crosshair
+  ctx.strokeStyle = '#1e3a5f44';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(cw / 2, pad); ctx.lineTo(cw / 2, pad + plotH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad, ch / 2); ctx.lineTo(pad + plotW, ch / 2); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Dots
+  const dotR = Math.max(7, Math.min(16, 160 / list.length));
+  const dotMeta = [];
+
+  list.forEach((d, i) => {
+    const px = pad + ((d.wx - mx0) / rngX) * plotW;
+    const py = pad + plotH - ((d.wy - my0) / rngY) * plotH;
+
+    // Glow
+    const bc = d.recipe === 1 ? '96,165,250' : '167,139,250';
+    const grad = ctx.createRadialGradient(px, py, 0, px, py, dotR * 2.5);
+    grad.addColorStop(0, `rgba(${bc},0.3)`);
+    grad.addColorStop(1, `rgba(${bc},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(px, py, dotR * 2.5, 0, Math.PI * 2); ctx.fill();
+
+    // Dot
+    ctx.beginPath(); ctx.arc(px, py, dotR, 0, Math.PI * 2);
+    ctx.fillStyle = d.recipe === 1 ? '#3b82f6' : '#8b5cf6';
+    ctx.fill();
+    ctx.strokeStyle = '#e0eaf4';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Index
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.max(8, dotR * 0.8)}px Segoe UI`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i + 1, px, py);
+
+    dotMeta.push({ x: px, y: py, r: dotR, d, i });
+  });
+
+  // Axis labels
+  ctx.fillStyle = '#5a7a9a';
+  ctx.font = '9px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(Math.round(mx0) + ' µm', pad, pad + plotH + 5);
+  ctx.fillText(Math.round(mx1) + ' µm', pad + plotW, pad + plotH + 5);
+  ctx.fillText('Wafer X →', cw / 2, pad + plotH + 18);
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(Math.round(my0), pad - 5, pad + plotH);
+  ctx.fillText(Math.round(my1), pad - 5, pad);
+  ctx.save();
+  ctx.translate(12, ch / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillText('Wafer Y →', 0, 0);
+  ctx.restore();
+
+  // Legend dots
+  ctx.font = '9px Segoe UI';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#3b82f6';
+  ctx.beginPath(); ctx.arc(pad + 6, pad - 14, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7a9ab5'; ctx.fillText('Bump PMI', pad + 16, pad - 11);
+  ctx.fillStyle = '#8b5cf6';
+  ctx.beginPath(); ctx.arc(pad + 90, pad - 14, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7a9ab5'; ctx.fillText('Surface', pad + 100, pad - 11);
+
+  // Tooltip on hover
+  const tip = document.getElementById('drillDieTooltip');
+  canvas.onmousemove = e => {
+    const r = canvas.getBoundingClientRect();
+    const cx = (e.clientX - r.left) * (canvas.width / r.width);
+    const cy = (e.clientY - r.top) * (canvas.height / r.height);
+    const hit = dotMeta.find(m => Math.hypot(cx - m.x, cy - m.y) <= m.r + 4);
+    if (hit) {
+      tip.innerHTML = `<b>Defect #${hit.i + 1}</b><br>X: ${Math.round(hit.d.wx)} µm<br>Y: ${Math.round(hit.d.wy)} µm<br>Class: ${hit.d.oclass} | Zone: ${hit.d.zone}`;
+      tip.style.left = (e.clientX - r.left + 14) + 'px';
+      tip.style.top = (e.clientY - r.top - 10) + 'px';
+      tip.classList.add('visible');
+      canvas.style.cursor = 'pointer';
+    } else {
+      tip.classList.remove('visible');
+      canvas.style.cursor = 'default';
+    }
+  };
+  canvas.onmouseleave = () => tip.classList.remove('visible');
+
+  // Click defect dot → popup
+  canvas.onclick = e => {
+    const r = canvas.getBoundingClientRect();
+    const cx = (e.clientX - r.left) * (canvas.width / r.width);
+    const cy = (e.clientY - r.top) * (canvas.height / r.height);
+    const hit = dotMeta.find(m => Math.hypot(cx - m.x, cy - m.y) <= m.r + 4);
+    if (hit) {
+      showPosPopup(e.clientX, e.clientY, `Defect #${hit.i + 1}`, [
+        ['Die', `(${col}, ${row})`],
+        ['Wafer X', Math.round(hit.d.wx) + ' µm'],
+        ['Wafer Y', Math.round(hit.d.wy) + ' µm'],
+        ['Recipe', hit.d.recipeName],
+        ['Class', hit.d.oclass],
+        ['Zone', hit.d.zone],
+        ['Wafer', drillWafer]
+      ]);
+    }
+  };
+
+  // Click table row → popup
+  view.querySelectorAll('.drill-row').forEach(tr => {
+    tr.addEventListener('click', e => {
+      const d = list[+tr.dataset.idx];
+      showPosPopup(e.clientX, e.clientY, `Defect #${+tr.dataset.idx + 1}`, [
+        ['Die', `(${col}, ${row})`],
+        ['Wafer X', Math.round(d.wx) + ' µm'],
+        ['Wafer Y', Math.round(d.wy) + ' µm'],
+        ['Recipe', d.recipeName],
+        ['Class', d.oclass],
+        ['Zone', d.zone],
+        ['Wafer', drillWafer]
+      ]);
+    });
+  });
+}
+
+function drillReset() {
+  drillSelectedDie = null;
+  document.getElementById('drillSelRing').style.display = 'none';
+  document.getElementById('drillDieView').innerHTML = `
+    <div class="drill-empty" id="drillEmpty">
+      <div class="de-icon">&#9670;</div>
+      <div class="de-text">Select a die on the wafer map</div>
+      <div class="de-hint">Click any colored cell to drill into its defect layout</div>
+    </div>`;
+}
+
+function initDrill() {
+  // Tabs
+  const tabsEl = document.getElementById('drillTabs');
+  tabsEl.innerHTML = waferIds.map(w =>
+    `<button class="wafer-tab${w === drillWafer ? ' active' : ''}" data-w="${w}">Wafer ${w}</button>`
+  ).join('');
+  tabsEl.addEventListener('click', e => {
+    const btn = e.target.closest('.wafer-tab');
+    if (!btn) return;
+    drillWafer = btn.dataset.w;
+    tabsEl.querySelectorAll('.wafer-tab').forEach(b => b.classList.toggle('active', b === btn));
+    drillReset();
+    drillDrawWafer();
+  });
+
+  drillDrawWafer();
+
+  // Tooltip
+  const canvas = document.getElementById('drillWaferCanvas');
+  const tip = document.getElementById('drillWaferTooltip');
+
+  canvas.addEventListener('mousemove', e => {
+    if (!drillMeta) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const col = Math.floor((mx - drillMeta.ox) / drillMeta.cellW);
+    const row = Math.floor((my - drillMeta.oy) / drillMeta.cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS && isOnWafer(col, row)) {
+      const k = dieKey(col, row);
+      const count = drillMeta.dm[k] ? drillMeta.dm[k].length : 0;
+      tip.innerHTML = `<b>Die (${col}, ${row})</b><br>Defects: ${count}<br><i style="color:#00d4aa">Click to drill in</i>`;
+      tip.style.left = (e.clientX - rect.left + 14) + 'px';
+      tip.style.top = (e.clientY - rect.top - 10) + 'px';
+      tip.classList.add('visible');
+      canvas.style.cursor = 'pointer';
+    } else {
+      tip.classList.remove('visible');
+      canvas.style.cursor = 'default';
+    }
+  });
+  canvas.addEventListener('mouseleave', () => { tip.classList.remove('visible'); });
+
+  // Click → drill into die
+  canvas.addEventListener('click', e => {
+    if (!drillMeta) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const col = Math.floor((mx - drillMeta.ox) / drillMeta.cellW);
+    const row = Math.floor((my - drillMeta.oy) / drillMeta.cellH);
+    if (col >= 0 && col < COLS && row >= 0 && row < ROWS && isOnWafer(col, row)) {
+      drillOpenDie(col, row);
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  initDrill();
+  initWaferMap();
+  initKpiCards();
+  initComparison();
+  initDieGrid();
+  initDieDetail();
+  initDieCards();
+  initDieMap();
+  initDieInterior();
+  initDieBin();
+});
+</script>
+</body>
+</html>

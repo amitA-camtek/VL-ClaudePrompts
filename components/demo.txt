@@ -1,0 +1,165 @@
+Here’s a clean, detailed prompt you can give to Claude to generate a React demo that matches your UI and behavior:
+
+---
+
+### Prompt for Claude
+
+```id="r3a9k1"
+add to the application a demo form that is oped from the left tolbar (same as side by side demo).
+
+General Requirements:
+- Use React functional components with hooks.
+- Use the style of the system..
+- Keep everything in a single page for demo purposes.
+- No external drawing libraries (no fabric.js, no konva).
+- Use clean, modular components.
+
+-------------------------------------
+LAYOUT OVERVIEW
+-------------------------------------
+
+The screen is divided into 3 main sections:
+
+1. LEFT SIDE (Main Workspace)
+2. RIGHT SIDE (Preview + Placeholder Panels)
+3. BOTTOM LEFT (Defects Table)
+
+-------------------------------------
+1. TOP-LEFT — TILE REVIEW PANEL
+-------------------------------------
+
+use the "SideBySideViewer" component:
+
+- Left panel:
+  - Displays the "selected tile" of the the "Completed Image"  (main image).
+  - Add ability to draw bounding boxes on top of this image.
+  - Use a transparent overlay (canvas or absolutely positioned div).
+  
+- Right panel:
+  - Displays a comparison image (static for demo).
+
+Bounding Box Requirements:
+- Click + drag to draw rectangle.
+- Show rectangle outline (bright green).
+- Support multiple boxes.
+- Store boxes in state:
+  {
+    id,
+    x,
+    y,
+    width,
+    height,
+    class: "Surface",
+    confidence: random mock value (0.5–0.95)
+  }
+- Boxes persist after drawing also showen in the "DefectsTable".
+- Optional: allow delete on click.
+
+-------------------------------------
+2. FILMSTRIP / TIMELINE (Below main view)
+-------------------------------------
+
+Create a horizontal scrollable strip of thumbnail images:
+
+- Show ~10–15 thumbnails.
+- Clicking a thumbnail updates the selected tile.
+- Highlight the active thumbnail.
+- Use placeholder/sample images.
+
+-------------------------------------
+3. BOTTOM-LEFT — DEFECTS TABLE
+-------------------------------------
+
+Create a "DefectsTable" component:
+
+- Title: "DEFECTS IN THIS TILE"
+- Columns:
+  - #
+  - Class (dropdown)
+  - X (px)
+  - Y (px)
+  - W (px)
+  - H (px)
+  - Conf
+  - Delete (X button)
+
+Behavior:
+- Table is synced with bounding boxes.
+- Updating boxes updates the table.
+- Deleting row removes the box.
+- Class dropdown should have:
+  - Surface
+  - Via
+  - Scratch
+
+-------------------------------------
+4. RIGHT PANEL (STACKED)
+-------------------------------------
+
+TOP-RIGHT — Completed Image
+- Show a static image preview.
+- show a rectange that indicate the location of the Tile shown in the SideBySideViewer
+
+MIDDLE-RIGHT — Die Edit Component
+- Placeholder panel
+- Title: "Die View"
+- Show a grid (like a 4x4 matrix)
+- Highlight one cell
+- Add a label: "Die Edit"
+
+BOTTOM-RIGHT — Wafer Map Component
+- Placeholder panel
+- Title: "Wafer Map"
+- Show a colored grid:
+  - Green = good
+  - Yellow = warning
+  - Blue = selected
+- Static demo only
+
+-------------------------------------
+INTERACTION DETAILS
+-------------------------------------
+
+- Bounding boxes should use mouse events:
+  - mousedown → start
+  - mousemove → resize
+  - mouseup → finalize
+- Coordinates must be relative to the image.
+- Boxes should render on top of the image.
+
+-------------------------------------
+STYLING
+-------------------------------------
+
+- Dark UI:
+  - use the syle of the application
+- Accent:
+  - Bounding boxes: neon green
+  - Selected items: blue highlight
+- Use flexbox or grid layout.
+
+-------------------------------------
+DELIVERABLE
+-------------------------------------
+
+- Provide full React code (single file is fine).
+- Include all components in one file for demo:
+  - App
+  - SideBySideViewer
+  - BoundingBoxLayer
+  - Filmstrip
+  - DefectsTable
+  - DieViewPlaceholder
+  - WaferMapPlaceholder
+- Include basic CSS (inline or styles object is fine).
+- Use sample image URLs.
+
+-------------------------------------
+BONUS (if possible)
+-------------------------------------
+
+- Show box labels on rectangles
+- Add "Clear All Boxes" button
+- Smooth drawing UX (no flicker)
+```
+

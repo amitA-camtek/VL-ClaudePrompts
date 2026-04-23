@@ -25,9 +25,7 @@ from vldbaccess.dataset import DatasetDB
 from vldbaccess.dataset_folders_dao import DatasetFoldersDAO
 from vldbaccess.models.dataset_folder import FolderStatus
 from vldbaccess.user import User, get_user_default_org_workspace_sync
-from clustplorer.logic import datasets_bl
 from clustplorer.logic.process_dataset_folder_task.process_dataset_folder_task_impl import ProcessDatasetFolderTask
-from vl.tasks import DatasetCreationTaskService
 
 logger = get_vl_logger(__name__)
 
@@ -300,10 +298,16 @@ async def export_to_dataset(
                 raise HTTPException(status_code=500, detail="ExportADC produced no output subfolder.")
             exported_subfolder = max(new_subdirs, key=lambda d: d.stat().st_mtime).name
 
-        # Copy from CIFS mount to local Ubuntu storage so image proxy can serve images.
-        # CIFS-mounted paths are not visible inside k8s pods (mountPropagation: None).
-        host_dir = Settings.DATASETS_HOST_PATH or ""
-        if not host_dir:
+        # Copy exported subfolder to the datasets root so the image proxy and pipeline can serve it.
+        # Prefer DATASETS_CREATION_DIRECTORY (pod-internal mount) if it exists on the filesystem;
+        # fall back to DATASETS_HOST_PATH for the host-side debug case.
+        _creation_dir = Settings.DATASETS_CREATION_DIRECTORY or ""
+        _host_path = Settings.DATASETS_HOST_PATH or ""
+        if _creation_dir and os.path.isdir(_creation_dir):
+            host_dir = _creation_dir
+        elif _host_path and os.path.isdir(_host_path):
+            host_dir = _host_path
+        else:
             raise HTTPException(status_code=500, detail="DATASETS_HOST_PATH is not configured")
         cifs_source = os.path.join(host_dir, base_folder, exported_subfolder)
         local_dest = os.path.join(host_dir, exported_subfolder)
@@ -361,19 +365,6 @@ async def export_to_dataset(
         # absolute path works whether this runs on the host (debug) or inside the pod (deployed).
         await ProcessDatasetFolderTask(folder_id, local_dest).run()
         logger.info(f"Ingestion complete for dataset {ds.dataset_id}, folder {exported_subfolder}")
-
-        # 7. Trigger the analysis pipeline (fastdup/Argo) so the dataset progresses past NEW
-        task = await DatasetCreationTaskService.create_dataset_task(
-            dataset_id=ds.dataset_id,
-            created_by=user.user_id,
-        )
-        DatasetDB.update(ds.dataset_id, status=DatasetStatus.UPLOADING)
-        ds = DatasetDB.get_by_id(ds.dataset_id, allow_read_only=False)
-        await datasets_bl.trigger_processing(
-            user=user, ds=ds, task_id=task.task_id,
-            selected_folders_names=[exported_subfolder],
-        )
-        logger.info(f"Pipeline triggered for dataset {ds.dataset_id}, task {task.task_id}")
 
         return ExportDatasetResponse(dataset_id=str(ds.dataset_id))
     except HTTPException:

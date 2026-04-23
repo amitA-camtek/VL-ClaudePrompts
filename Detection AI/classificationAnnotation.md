@@ -779,7 +779,7 @@ These UI elements and behaviors are described in other flows (primarily **AI Cla
 
 ## Real Scan Result Data Analysis
 
-**Source:** `scan/Scane Resault after/MTK-AHJ11236_setup1_20260406_201352/`
+**Source:** `scan/scan-result-after/MTK-AHJ11236_setup1_20260406_201352/`
 
 ### Scan Result Folder Structure
 
